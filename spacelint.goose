@@ -579,6 +579,7 @@ fn print_help() {
         "      \x1b[1m--rules\x1b[0m              List all the rules that are currently registered\n",
         "      \x1b[1m--fix\x1b[0m                Automatically fix whitespace issues\n",
         "  \x1b[1m-i, --interactive\x1b[0m        Prompt to apply fix for each issue\n",
+        "  \x1b[1m-f, --format\x1b[0m <FORMAT>    Use a specific output format (default, agent, stylish)\n",
         "      \x1b[1m--indent\x1b[0m <MODE>      Set indentation mode (can be specified multiple times):\n",
         "                             \x1b[32mtabs\x1b[0m            Require tabs (default)\n",
         "                             \x1b[32m<N>\x1b[0m             Require N spaces (e.g. 2, 4)\n",
@@ -590,6 +591,8 @@ fn print_help() {
         "                             \x1b[32mtabs.<EXT>\x1b[0m      Require tabs for extension (e.g. tabs.go)\n\n",
         "\x1b[1m\x1b[36mExamples:\x1b[0m\n",
         "  spacelint .\n",
+        "  spacelint -f agent .\n",
+        "  spacelint -f stylish .\n",
         "  spacelint --indent 2.json --indent 4.py src/\n",
         "  cat file.js | spacelint -\n",
         "  cat file.js | spacelint --fix - > fixed.js\n\n",
@@ -649,14 +652,42 @@ fn main() {
         if cfg.fix {
             write_stdout(fixed_buf);
         } else {
-            // Print diagnostics in oxlint style
-            for d in diags {
-                total_warnings++;
-                print_diagnostic("<stdin>", d.line, d.col, d.end_col, d.rule, d.message, "");
+            match cfg.format {
+                Agent => {
+                    for d in diags {
+                        total_warnings++;
+                        print_diagnostic_agent("<stdin>", d.line, d.col, d.rule, d.message);
+                    }
+                },
+                Stylish => {
+                    if diags.len > 0 {
+                        var max_line_col_len: i32 = 0;
+                        var max_msg_len: i32 = 0;
+                        for d in diags {
+                            total_warnings++;
+                            let lc_len = get_num_digits(d.line) + 1 + get_num_digits(d.col);
+                            if lc_len > max_line_col_len { max_line_col_len = lc_len; }
+                            if (d.message.len as! i32) > max_msg_len { max_msg_len = d.message.len as! i32; }
+                        }
+                        var s_out: u8[>..] = [];
+                        format_stylish_file_header(s_out, "<stdin>");
+                        for d in diags {
+                            format_stylish_diagnostic(s_out, d.line, d.col, max_line_col_len, d.rule, d.message, max_msg_len);
+                        }
+                        write_stdout(s_out);
+                    }
+                    print_stylish_summary(total_warnings, total_errors);
+                },
+                Default => {
+                    for d in diags {
+                        total_warnings++;
+                        print_diagnostic("<stdin>", d.line, d.col, d.end_col, d.rule, d.message, "");
+                    }
+                    let end_time = clock_ns();
+                    let elapsed_ms = (end_time - start_time) / 1000000;
+                    print_summary(total_warnings, total_errors, 1, elapsed_ms);
+                }
             }
-            let end_time = clock_ns();
-            let elapsed_ms = (end_time - start_time) / 1000000;
-            print_summary(total_warnings, total_errors, 1, elapsed_ms);
         }
         return;
     }
@@ -766,49 +797,91 @@ fn main() {
             }
         } else {
             if diags.len > 0 {
-                // Precompute line offsets in single pass: O(file_len)
-                var line_starts: i32[>..] = [];
-                line_starts.push(0);
-                var p = 0;
-                while p < file_bytes.len {
-                    if file_bytes[p] == '\n' {
-                        line_starts.push((p + 1) as! i32);
-                    }
-                    p++;
-                }
-
-                var out_batch: u8[>..] = [];
-                for d in diags {
-                    total_warnings++;
-                    let l_idx = d.line - 1;
-                    var line_cnt: u8[>..] = [];
-                    if l_idx >= 0 && l_idx < line_starts.len {
-                        let ls = line_starts[l_idx];
-                        var le = ls;
-                        while le < file_bytes.len && file_bytes[le] != '\n' && file_bytes[le] != '\r' {
-                            le++;
+                match cfg.format {
+                    Agent => {
+                        var out_batch: u8[>..] = [];
+                        for d in diags {
+                            total_warnings++;
+                            format_diagnostic_agent(out_batch, file_name, d.line, d.col, d.rule, d.message);
+                            if out_batch.len >= 16384 {
+                                write_stdout(out_batch);
+                                out_batch.clear();
+                            }
                         }
-                        if le > ls {
-                            line_cnt.append(file_bytes[ls..le]);
+                        if out_batch.len > 0 {
+                            write_stdout(out_batch);
+                        }
+                    },
+                    Stylish => {
+                        var max_line_col_len: i32 = 0;
+                        var max_msg_len: i32 = 0;
+                        for d in diags {
+                            total_warnings++;
+                            let lc_len = get_num_digits(d.line) + 1 + get_num_digits(d.col);
+                            if lc_len > max_line_col_len { max_line_col_len = lc_len; }
+                            if (d.message.len as! i32) > max_msg_len { max_msg_len = d.message.len as! i32; }
+                        }
+                        var s_out: u8[>..] = [];
+                        format_stylish_file_header(s_out, file_name);
+                        for d in diags {
+                            format_stylish_diagnostic(s_out, d.line, d.col, max_line_col_len, d.rule, d.message, max_msg_len);
+                        }
+                        write_stdout(s_out);
+                    },
+                    Default => {
+                        // Precompute line offsets in single pass: O(file_len)
+                        var line_starts: i32[>..] = [];
+                        line_starts.push(0);
+                        var p = 0;
+                        while p < file_bytes.len {
+                            if file_bytes[p] == '\n' {
+                                line_starts.push((p + 1) as! i32);
+                            }
+                            p++;
+                        }
+
+                        var out_batch: u8[>..] = [];
+                        for d in diags {
+                            total_warnings++;
+                            let l_idx = d.line - 1;
+                            var line_cnt: u8[>..] = [];
+                            if l_idx >= 0 && l_idx < line_starts.len {
+                                let ls = line_starts[l_idx];
+                                var le = ls;
+                                while le < file_bytes.len && file_bytes[le] != '\n' && file_bytes[le] != '\r' {
+                                    le++;
+                                }
+                                if le > ls {
+                                    line_cnt.append(file_bytes[ls..le]);
+                                }
+                            }
+
+                            format_diagnostic(out_batch, file_name, d.line, d.col, d.end_col, d.rule, d.message, line_cnt);
+                            if out_batch.len >= 16384 {
+                                write_stdout(out_batch);
+                                out_batch.clear();
+                            }
+                        }
+                        if out_batch.len > 0 {
+                            write_stdout(out_batch);
                         }
                     }
-
-                    format_diagnostic(out_batch, file_name, d.line, d.col, d.end_col, d.rule, d.message, line_cnt);
-                    if out_batch.len >= 16384 {
-                        write_stdout(out_batch);
-                        out_batch.clear();
-                    }
-                }
-                if out_batch.len > 0 {
-                    write_stdout(out_batch);
                 }
             }
         }
     }
 
     if !cfg.fix {
-        let end_time = clock_ns();
-        let elapsed_ms = (end_time - start_time) / 1000000;
-        print_summary(total_warnings, total_errors, files_processed, elapsed_ms);
+        match cfg.format {
+            Agent => {},
+            Stylish => {
+                print_stylish_summary(total_warnings, total_errors);
+            },
+            Default => {
+                let end_time = clock_ns();
+                let elapsed_ms = (end_time - start_time) / 1000000;
+                print_summary(total_warnings, total_errors, files_processed, elapsed_ms);
+            }
+        }
     }
 }

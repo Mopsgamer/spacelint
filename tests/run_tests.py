@@ -235,6 +235,72 @@ def test_indent_off():
 
     print("  --indent off tests passed!")
 
+def test_format_options():
+    print("Testing format options (-f agent, -f stylish, -f default, --format)...")
+    sample_file = os.path.join(FIXTURES_DIR, "test.js")
+
+    # 1. -f agent
+    code, out, _ = run_cmd([SPACELINT_BIN, "-f", "agent", sample_file])
+    assert code == 0, f"-f agent failed: code={code}"
+    # Must not contain ANSI escape codes
+    assert "\x1b[" not in out, f"-f agent should not contain ANSI colors, got: {repr(out)}"
+    # Must match: <file>:<line>:<col>: warning spacelint(<rule>): <msg>
+    assert f"{sample_file}:2:16: warning spacelint(no-trailing-spaces): Trailing whitespace found\n" == out
+    # Must not contain summary
+    assert "Found" not in out and "problem" not in out
+
+    # Test agent with stdin
+    code, out, _ = run_cmd([SPACELINT_BIN, "-f", "agent", "-"], input_data="var a = 1; \n")
+    assert code == 0
+    assert "\x1b[" not in out
+    assert "<stdin>:1:11: warning spacelint(no-trailing-spaces): Trailing whitespace found\n" == out
+
+    # Test --format=agent
+    code, out, _ = run_cmd([SPACELINT_BIN, "--format=agent", sample_file])
+    assert code == 0
+    assert f"{sample_file}:2:16: warning spacelint(no-trailing-spaces): Trailing whitespace found\n" == out
+
+    # 2. -f stylish
+    code, out, _ = run_cmd([SPACELINT_BIN, "-f", "stylish", sample_file])
+    assert code == 0, f"-f stylish failed: code={code}"
+    # Verify file underline header
+    assert f"\x1b[4m{sample_file}\x1b[0m" in out
+    # Verify warning and rule
+    assert "warning" in out and "spacelint(no-trailing-spaces)" in out
+    # Verify stylish summary
+    clean_out = strip_ansi(out)
+    assert "✖ 1 problem (0 errors, 1 warning)" in clean_out
+
+    # Test --format stylish
+    code, out, _ = run_cmd([SPACELINT_BIN, "--format", "stylish", sample_file])
+    assert code == 0
+    assert "✖ 1 problem (0 errors, 1 warning)" in strip_ansi(out)
+
+    # Test stylish with stdin
+    code, out, _ = run_cmd([SPACELINT_BIN, "-f", "stylish", "-"], input_data="var a = 1; \n")
+    assert code == 0
+    assert "\x1b[4m<stdin>\x1b[0m" in out
+    assert "✖ 1 problem (0 errors, 1 warning)" in strip_ansi(out)
+
+    # 3. -f default
+    code, out, _ = run_cmd([SPACELINT_BIN, "-f", "default", sample_file])
+    assert code == 0, f"-f default failed: code={code}"
+    # Bold blue file path in header
+    assert f"\x1b[1m\x1b[34m{sample_file}\x1b[0m" in out
+    # Magenta underline with horizontal dashes (─)
+    assert "\x1b[35m" in out
+    assert "───" in out
+    # Default summary
+    clean_out = strip_ansi(out)
+    assert "Found 1 warning on 1 file" in clean_out
+
+    # Test --format=default
+    code, out, _ = run_cmd([SPACELINT_BIN, "--format=default", sample_file])
+    assert code == 0
+    assert "Found 1 warning on 1 file" in strip_ansi(out)
+
+    print("  Format options tests passed!")
+
 def main():
     test_cli_flags()
     test_language_fixtures()
@@ -244,6 +310,7 @@ def main():
     test_in_place_fix()
     test_rules()
     test_indent_off()
+    test_format_options()
     print("\nALL SPACELINT TESTS PASSED SUCCESSFULLY!")
 
 if __name__ == "__main__":

@@ -13,12 +13,19 @@ enum IndentKind {
     OffExt { ext: u8[..16] }
 }
 
+enum FormatOption {
+    Default,
+    Agent,
+    Stylish
+}
+
 struct Config {
     help: bool,
     version: bool,
     rules: bool,
     fix: bool,
     interactive: bool,
+    format: FormatOption,
     indents: IndentKind[..32],
     files: (const u8[:])[>..]
 }
@@ -68,6 +75,16 @@ fn parse_indent_val(val: const u8[:]) -> IndentKind {
     }
 }
 
+fn parse_format_val(val: const u8[:]) -> FormatOption {
+    if val == "agent" {
+        return FormatOption.Agent;
+    } else if val == "stylish" {
+        return FormatOption.Stylish;
+    } else {
+        return FormatOption.Default;
+    }
+}
+
 fn parse_cli_args() -> Config {
     let raw = args();
     var cfg = Config {
@@ -76,6 +93,7 @@ fn parse_cli_args() -> Config {
         rules: false,
         fix: false,
         interactive: false,
+        format: FormatOption.Default,
         indents: [],
         files: []
     };
@@ -93,6 +111,13 @@ fn parse_cli_args() -> Config {
             cfg.fix = true;
         } else if arg_str == "-i" || arg_str == "--interactive" {
             cfg.interactive = true;
+        } else if arg_str == "-f" || arg_str == "--format" {
+            i++;
+            if i < raw.len { cfg.format = parse_format_val(raw[i]); }
+        } else if arg_str.len > 9 && arg_str[0..9] == "--format=" {
+            cfg.format = parse_format_val(arg_str[9..]);
+        } else if arg_str.len > 3 && arg_str[0..3] == "-f=" {
+            cfg.format = parse_format_val(arg_str[3..]);
         } else if arg_str == "--indent" {
             i++;
             if i < raw.len { cfg.indents.push(parse_indent_val(raw[i])); }
