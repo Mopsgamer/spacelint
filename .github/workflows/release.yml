@@ -1,0 +1,284 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag/version to release (e.g. v0.1.0)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-linux-x64:
+    name: Build (linux-x64)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Goose Compiler
+        run: |
+          GOOSE_VERSION="v2026.3"
+          DOWNLOAD_URL="https://github.com/aardappel/goose/releases/download/${GOOSE_VERSION}/goose-${GOOSE_VERSION}-linux-x64.tar.gz"
+          echo "Downloading Goose from ${DOWNLOAD_URL}..."
+          curl -sSL -o goose_pkg.tar.gz "${DOWNLOAD_URL}"
+          mkdir -p /tmp/goose_bin
+          tar -xzf goose_pkg.tar.gz -C /tmp/goose_bin
+          GOOSE_BIN=$(find /tmp/goose_bin -name goose -type f | head -n 1)
+          sudo mv "$GOOSE_BIN" /usr/local/bin/goose
+          sudo chmod +x /usr/local/bin/goose
+          goose version
+
+      - name: Build spacelint (linux-x64)
+        run: |
+          goose build spacelint.goose
+
+      - name: Prepare bare binary artifact
+        run: |
+          mkdir -p dist
+          cp spacelint dist/spacelint-linux-x64
+          chmod +x dist/spacelint-linux-x64
+          ls -la dist/
+
+      - name: Upload linux-x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spacelint-linux-x64
+          path: dist/spacelint-linux-x64
+          if-no-files-found: error
+
+  build-linux-arm64:
+    name: Build (linux-arm64)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Goose Compiler (x86_64) & aarch64 cross toolchain
+        run: |
+          GOOSE_VERSION="v2026.3"
+          DOWNLOAD_URL="https://github.com/aardappel/goose/releases/download/${GOOSE_VERSION}/goose-${GOOSE_VERSION}-linux-x64.tar.gz"
+          curl -sSL -o goose_pkg.tar.gz "${DOWNLOAD_URL}"
+          mkdir -p /tmp/goose_bin
+          tar -xzf goose_pkg.tar.gz -C /tmp/goose_bin
+          GOOSE_BIN=$(find /tmp/goose_bin -name goose -type f | head -n 1)
+          sudo mv "$GOOSE_BIN" /usr/local/bin/goose
+          sudo chmod +x /usr/local/bin/goose
+          goose version
+          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Cross-compile spacelint for linux-arm64
+        run: |
+          mkdir -p dist
+          goose -o /tmp/spacelint_arm64.c spacelint.goose --standalone
+          aarch64-linux-gnu-gcc -O2 /tmp/spacelint_arm64.c -o dist/spacelint-linux-arm64 -lm -lpthread
+          chmod +x dist/spacelint-linux-arm64
+          ls -la dist/
+
+      - name: Upload linux-arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spacelint-linux-arm64
+          path: dist/spacelint-linux-arm64
+          if-no-files-found: error
+
+  build-darwin-x64:
+    name: Build (darwin-x64)
+    runs-on: macos-13
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Goose Compiler
+        run: |
+          GOOSE_VERSION="v2026.3"
+          DOWNLOAD_URL="https://github.com/aardappel/goose/releases/download/${GOOSE_VERSION}/goose-${GOOSE_VERSION}-macos-x64.tar.gz"
+          curl -sSL -o goose_pkg.tar.gz "${DOWNLOAD_URL}"
+          mkdir -p /tmp/goose_bin
+          tar -xzf goose_pkg.tar.gz -C /tmp/goose_bin
+          GOOSE_BIN=$(find /tmp/goose_bin -name goose -type f | head -n 1)
+          sudo mv "$GOOSE_BIN" /usr/local/bin/goose
+          sudo chmod +x /usr/local/bin/goose
+          goose version
+
+      - name: Build spacelint (darwin-x64)
+        run: |
+          goose build spacelint.goose
+          mkdir -p dist
+          cp spacelint dist/spacelint-darwin-x64
+          chmod +x dist/spacelint-darwin-x64
+          ls -la dist/
+
+      - name: Upload darwin-x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spacelint-darwin-x64
+          path: dist/spacelint-darwin-x64
+          if-no-files-found: error
+
+  build-darwin-arm64:
+    name: Build (darwin-arm64)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Goose Compiler
+        run: |
+          GOOSE_VERSION="v2026.3"
+          DOWNLOAD_URL="https://github.com/aardappel/goose/releases/download/${GOOSE_VERSION}/goose-${GOOSE_VERSION}-macos-arm64.tar.gz"
+          curl -sSL -o goose_pkg.tar.gz "${DOWNLOAD_URL}"
+          mkdir -p /tmp/goose_bin
+          tar -xzf goose_pkg.tar.gz -C /tmp/goose_bin
+          GOOSE_BIN=$(find /tmp/goose_bin -name goose -type f | head -n 1)
+          sudo mv "$GOOSE_BIN" /usr/local/bin/goose
+          sudo chmod +x /usr/local/bin/goose
+          goose version
+
+      - name: Build spacelint (darwin-arm64)
+        run: |
+          goose build spacelint.goose
+          mkdir -p dist
+          cp spacelint dist/spacelint-darwin-arm64
+          chmod +x dist/spacelint-darwin-arm64
+          ls -la dist/
+
+      - name: Upload darwin-arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spacelint-darwin-arm64
+          path: dist/spacelint-darwin-arm64
+          if-no-files-found: error
+
+  build-windows-x64:
+    name: Build (windows-x64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Goose Compiler
+        shell: pwsh
+        run: |
+          $GOOSE_VERSION = "v2026.3"
+          $DOWNLOAD_URL = "https://github.com/aardappel/goose/releases/download/$GOOSE_VERSION/goose-$GOOSE_VERSION-windows-x64.zip"
+          Write-Host "Downloading Goose from $DOWNLOAD_URL..."
+          Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile goose_pkg.zip
+          Expand-Archive -Path goose_pkg.zip -DestinationPath goose_extracted
+          $gooseExe = Get-ChildItem -Path goose_extracted -Filter "goose.exe" -Recurse | Select-Object -First 1
+          $targetDir = "$HOME\bin"
+          New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+          Copy-Item $gooseExe.FullName -Destination "$targetDir\goose.exe"
+          Add-Content $env:GITHUB_PATH "$targetDir"
+          & "$targetDir\goose.exe" version
+
+      - name: Build spacelint (windows-x64)
+        shell: bash
+        run: |
+          goose build spacelint.goose
+          mkdir -p dist
+          cp spacelint.exe dist/spacelint-windows-x64.exe
+          ls -la dist/
+
+      - name: Upload windows-x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spacelint-windows-x64.exe
+          path: dist/spacelint-windows-x64.exe
+          if-no-files-found: error
+
+  release:
+    name: Publish Release & Attestations
+    needs:
+      - build-linux-x64
+      - build-linux-arm64
+      - build-darwin-x64
+      - build-darwin-arm64
+      - build-windows-x64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: Make binaries executable and list release artifacts
+        run: |
+          chmod +x dist/spacelint-* || true
+          echo "=== Release Artifacts (Bare Executables) ==="
+          ls -la dist/
+
+      - name: Verify NO archives or readmes exist in release artifacts
+        run: |
+          FORBIDDEN=$(find dist/ -type f \( -name "*.zip" -o -name "*.tar*" -o -name "*.gz" -o -iname "*readme*" \))
+          if [ -n "$FORBIDDEN" ]; then
+            echo "Error: forbidden archive or readme found: $FORBIDDEN"
+            exit 1
+          fi
+
+      - name: Determine Release Tag
+        id: release_tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Releasing tag: ${TAG}"
+
+      - name: Sign Bare Binaries with GitHub Artifact Attestations
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/spacelint-*"
+
+      - name: Sign Release Manifest with Packslip
+        uses: jdx/packslip@v1
+        with:
+          artifacts: "dist/spacelint-*"
+          bin: spacelint
+          tag: ${{ steps.release_tag.outputs.tag }}
+          out: .
+          upload: false
+          attest: true
+
+      - name: Create GitHub Release with Automatic SemVer Release Notes
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: ${{ steps.release_tag.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            dist/spacelint-*
+            packslip.sigstore.json
+          draft: false
+          prerelease: false

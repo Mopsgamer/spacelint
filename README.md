@@ -21,10 +21,51 @@ A fast, language-aware whitespace linter and fixer CLI written in the [Goose pro
   - `--indent auto` (autodetects tabs vs spaces per file)
   - `--indent auto.<ext>` (autodetects for files with `<ext>`, tabs for all others)
 
-## Building & Running
+## Installation
+
+`spacelint` is distributed as signed, bare standalone executables across Linux, macOS, Windows, and Termux/Android.
+
+### Using Packslip (Recommended)
+
+If you have [packslip](https://packslip.dev) or [mise](https://mise.jdx.dev) installed:
+```bash
+packslip install github.com/Mopsgamer/spacelint
+```
+Packslip verifies the cryptographic sigstore attestation (`packslip.sigstore.json`), downloads the appropriate binary for your OS and architecture, and links it into `~/.local/bin/`.
+
+### In Termux (Android)
+
+Termux runs Linux on ARM64. You can install via packslip or download the binary directly:
+```bash
+# Direct download into Termux bin
+curl -fsSL -o $PREFIX/bin/spacelint https://github.com/Mopsgamer/spacelint/releases/latest/download/spacelint-linux-arm64
+chmod +x $PREFIX/bin/spacelint
+```
+
+### Direct Download (Prebuilt Binaries)
+
+Download the bare executable matching your operating system and architecture from the [Releases page](https://github.com/Mopsgamer/spacelint/releases):
+
+| Platform | Target Architecture | Binary Asset |
+|---|---|---|
+| **Linux** | x86_64 | `spacelint-linux-x64` |
+| **Linux / Android (Termux)** | ARM64 (aarch64) | `spacelint-linux-arm64` |
+| **macOS** | Intel (x86_64) | `spacelint-darwin-x64` |
+| **macOS** | Apple Silicon (arm64) | `spacelint-darwin-arm64` |
+| **Windows** | x86_64 | `spacelint-windows-x64.exe` |
+
+On Linux / macOS:
+```bash
+curl -fsSL -o /usr/local/bin/spacelint https://github.com/Mopsgamer/spacelint/releases/latest/download/spacelint-linux-x64
+chmod +x /usr/local/bin/spacelint
+```
+
+### Building From Source
 
 Ensure `goose` is in your `PATH`:
 ```bash
+git clone https://github.com/Mopsgamer/spacelint.git
+cd spacelint
 goose build spacelint.goose
 ./spacelint --help
 ```
