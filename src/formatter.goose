@@ -1,6 +1,7 @@
-// Oxlint-style diagnostic and summary formatting for spacelint with ANSI colors.
+// Diagnostic and summary formatting for spacelint with ANSI colors.
 import std;
 import os;
+import src.rules;
 
 // ANSI escape helpers
 const ANSI_RESET: const u8[:] = "\x1b[0m";
@@ -36,7 +37,7 @@ fn print_rules() {
     write_stdout(out);
 }
 
-fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, end_col: i32, rule: const u8[:], msg: const u8[:], line_content: const u8[:]) {
+fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, end_col: i32, rule: const u8[:], msg: const u8[:], line_content: const u8[:], sev: RuleSeverity) {
     var num_len = 0;
     var n = line_num;
     if n <= 0 {
@@ -49,8 +50,15 @@ fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, 
     }
     let gutter_w = if num_len > 3 { num_len } else { 3 };
 
-    // Header: "  ⚠ spacelint(rule): msg"
-    format(out, "\n  ", ANSI_GOLD, ANSI_BOLD, "⚠ ", ANSI_RESET, ANSI_BOLD, "spacelint(", ANSI_RESET, ANSI_DIM, rule, ANSI_RESET, ANSI_BOLD, "): ", ANSI_RESET, msg, "\n");
+    // Header: "  ⚠ spacelint(rule): msg" or "  ✖ spacelint(rule): msg"
+    match sev {
+        Error => {
+            format(out, "\n  ", ANSI_RED, ANSI_BOLD, "✖ ", ANSI_RESET, ANSI_BOLD, "spacelint(", ANSI_RESET, ANSI_DIM, rule, ANSI_RESET, ANSI_BOLD, "): ", ANSI_RESET, msg, "\n");
+        },
+        _ => {
+            format(out, "\n  ", ANSI_GOLD, ANSI_BOLD, "⚠ ", ANSI_RESET, ANSI_BOLD, "spacelint(", ANSI_RESET, ANSI_DIM, rule, ANSI_RESET, ANSI_BOLD, "): ", ANSI_RESET, msg, "\n");
+        }
+    }
 
     // Top border: e.g. "   ╭─[" aligning ╭ with │
     var k = 0;
@@ -141,20 +149,23 @@ fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, 
     format(out, "╰────", ANSI_RESET, "\n");
 }
 
-fn print_diagnostic(file: const u8[:], line_num: i32, col: i32, end_col: i32, rule: const u8[:], msg: const u8[:], line_content: const u8[:]) {
+fn print_diagnostic(file: const u8[:], line_num: i32, col: i32, end_col: i32, rule: const u8[:], msg: const u8[:], line_content: const u8[:], sev: RuleSeverity) {
     var buf: u8[>..] = [];
-    format_diagnostic(buf, file, line_num, col, end_col, rule, msg, line_content);
+    format_diagnostic(buf, file, line_num, col, end_col, rule, msg, line_content, sev);
     write_stdout(buf);
 }
 
-fn format_diagnostic_agent(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, rule: const u8[:], msg: const u8[:]) {
-    // Format: file:line:col: warning spacelint(rule): msg
-    format(out, file, ":", line_num, ":", col, ": warning spacelint(", rule, "): ", msg, "\n");
+fn format_diagnostic_agent(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, rule: const u8[:], msg: const u8[:], sev: RuleSeverity) {
+    let sev_str = match sev {
+        Error => "error",
+        _ => "warning"
+    };
+    format(out, file, ":", line_num, ":", col, ": ", sev_str, " spacelint(", rule, "): ", msg, "\n");
 }
 
-fn print_diagnostic_agent(file: const u8[:], line_num: i32, col: i32, rule: const u8[:], msg: const u8[:]) {
+fn print_diagnostic_agent(file: const u8[:], line_num: i32, col: i32, rule: const u8[:], msg: const u8[:], sev: RuleSeverity) {
     var buf: u8[>..] = [];
-    format_diagnostic_agent(buf, file, line_num, col, rule, msg);
+    format_diagnostic_agent(buf, file, line_num, col, rule, msg, sev);
     write_stdout(buf);
 }
 
@@ -175,7 +186,7 @@ fn format_stylish_file_header(out: u8[>..]&, file: const u8[:]) {
 }
 
 // Format a single stylish item with line_col_w and msg_w for column alignment
-fn format_stylish_diagnostic(out: u8[>..]&, line_num: i32, col: i32, max_line_col_len: i32, rule: const u8[:], msg: const u8[:], max_msg_len: i32) {
+fn format_stylish_diagnostic(out: u8[>..]&, line_num: i32, col: i32, max_line_col_len: i32, rule: const u8[:], msg: const u8[:], max_msg_len: i32, sev: RuleSeverity) {
     let cur_line_col_len = get_num_digits(line_num) + 1 + get_num_digits(col);
     let pad_before = max_line_col_len - cur_line_col_len;
 
@@ -187,7 +198,14 @@ fn format_stylish_diagnostic(out: u8[>..]&, line_num: i32, col: i32, max_line_co
         p++;
     }
 
-    format(out, ANSI_DIM, line_num, ":", col, ANSI_RESET, "  ", ANSI_GOLD, "warning", ANSI_RESET, "  ", msg);
+    match sev {
+        Error => {
+            format(out, ANSI_DIM, line_num, ":", col, ANSI_RESET, "  ", ANSI_RED, "error  ", ANSI_RESET, "  ", msg);
+        },
+        _ => {
+            format(out, ANSI_DIM, line_num, ":", col, ANSI_RESET, "  ", ANSI_GOLD, "warning", ANSI_RESET, "  ", msg);
+        }
+    }
 
     var msg_pad = max_msg_len - msg.len;
     while msg_pad > 0 {
@@ -204,7 +222,8 @@ fn print_stylish_summary(warnings: i32, errors: i32) {
         return;
     }
     var out: u8[>..] = [];
-    format(out, "\n", ANSI_GOLD, "✖ ", total, if total == 1 { " problem" } else { " problems" },
+    let summary_color = if errors > 0 { ANSI_RED } else { ANSI_GOLD };
+    format(out, "\n", summary_color, "✖ ", total, if total == 1 { " problem" } else { " problems" },
         " (", errors, if errors == 1 { " error" } else { " errors" }, ", ",
         warnings, if warnings == 1 { " warning" } else { " warnings" }, ")\n", ANSI_RESET);
     write_stdout(out);

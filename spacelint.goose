@@ -6,7 +6,6 @@ import src.lang;
 import src.rules;
 import src.formatter;
 
-
 // Process a single text buffer, either linting or fixing.
 // Returns:
 //   was_modified: bool
@@ -23,83 +22,68 @@ fn process_buffer(
     // Determine target indentation for this file
     var target_indent_spaces = false;
     var indent_step: i32 = 4;
-    var indent_disabled = false;
+    var indent_disabled = (cfg.rules_cfg.indent_sev == RuleSeverity.Off);
 
     // First check for extension-specific matches
     var matched_rule = false;
-    for rule in cfg.indents {
-        match rule {
-            SpacesExt se => {
-                if file_ext == se.ext {
-                    target_indent_spaces = true;
-                    indent_step = se.n;
-                    indent_disabled = false;
-                    matched_rule = true;
-                    break;
-                }
-            },
-            TabsExt te => {
-                if file_ext == te.ext {
-                    target_indent_spaces = false;
-                    indent_step = 4;
-                    indent_disabled = false;
-                    matched_rule = true;
-                    break;
-                }
-            },
-            AutoExt ae => {
-                if file_ext == ae.ext {
-                    let sp, st = autodetect_spaces(text);
-                    target_indent_spaces = sp;
-                    indent_step = st;
-                    indent_disabled = false;
-                    matched_rule = true;
-                    break;
-                }
-            },
-            OffExt oe => {
-                if file_ext == oe.ext {
-                    indent_disabled = true;
-                    matched_rule = true;
-                    break;
-                }
-            },
-            Tabs => {},
-            Spaces _ => {},
-            Auto => {},
-            Off => {}
-        }
-    }
-
-    // If no extension-specific match, check for global defaults (last specified wins)
-    if !matched_rule {
-        for rule in cfg.indents {
-            match rule {
+    for rule in cfg.rules_cfg.indent_exts {
+        if file_ext == rule.ext {
+            match rule.kind {
                 Tabs => {
                     target_indent_spaces = false;
                     indent_step = 4;
                     indent_disabled = false;
+                    matched_rule = true;
+                    break;
                 },
                 Spaces s => {
                     target_indent_spaces = true;
                     indent_step = s.n;
                     indent_disabled = false;
+                    matched_rule = true;
+                    break;
                 },
                 Auto => {
                     let sp, st = autodetect_spaces(text);
                     target_indent_spaces = sp;
                     indent_step = st;
                     indent_disabled = false;
+                    matched_rule = true;
+                    break;
                 },
                 Off => {
                     indent_disabled = true;
-                },
-                SpacesExt _ => {},
-                TabsExt _ => {},
-                AutoExt _ => {},
-                OffExt _ => {}
+                    matched_rule = true;
+                    break;
+                }
             }
         }
+    }
+
+    // If no extension-specific match, check for global defaults
+    if !matched_rule {
+        match cfg.rules_cfg.indent_global {
+            Tabs => {
+                target_indent_spaces = false;
+                indent_step = 4;
+            },
+            Spaces s => {
+                target_indent_spaces = true;
+                indent_step = s.n;
+            },
+            Auto => {
+                let sp, st = autodetect_spaces(text);
+                target_indent_spaces = sp;
+                indent_step = st;
+            },
+            Off => {
+                indent_disabled = true;
+            }
+        }
+    }
+
+    if cfg.rules_cfg.indent_sev == RuleSeverity.Off {
+        indent_disabled = true;
     }
 
     // State for tracking multiline block comments and multiline strings
@@ -357,14 +341,19 @@ fn process_buffer(
         if !line_is_in_multiline_str {
             if trailing_len > 0 {
                 let is_cr_only = has_cr && content_len == raw_line.len - 1 && raw_line[raw_line.len - 1] == '\r';
-                let d = Diagnostic {
-                    line: line_num,
-                    col: (content_len + 1) as! i32,
-                    end_col: (raw_line.len + 1) as! i32,
-                    rule: if is_cr_only { "no-carriage-return" } else { "no-trailing-spaces" },
-                    message: if is_cr_only { "Unexpected carriage return found at end of line" } else { "Trailing whitespace found" }
-                };
-                out_diags.push(d);
+                let rule_sev = if is_cr_only { cfg.rules_cfg.carriage_return_sev } else { cfg.rules_cfg.trailing_spaces_sev };
+
+                if rule_sev != RuleSeverity.Off {
+                    let d = Diagnostic {
+                        line: line_num,
+                        col: (content_len + 1) as! i32,
+                        end_col: (raw_line.len + 1) as! i32,
+                        rule: if is_cr_only { "no-carriage-return" } else { "no-trailing-spaces" },
+                        message: if is_cr_only { "Unexpected carriage return found at end of line" } else { "Trailing whitespace found" },
+                        severity: rule_sev
+                    };
+                    out_diags.push(d);
+                }
             }
         }
 
@@ -393,34 +382,39 @@ fn process_buffer(
         }
 
         // Check indentation mismatch if not inside multiline string and not an empty line
-        if !indent_disabled && !line_is_in_multiline_str && !is_empty_line {
-            if is_mixed && !is_jsdoc_star_line {
+        if !line_is_in_multiline_str && !is_empty_line {
+            if is_mixed && !is_jsdoc_star_line && cfg.rules_cfg.mixed_spaces_tabs_sev != RuleSeverity.Off {
                 let d = Diagnostic {
                     line: line_num,
                     col: 1,
                     end_col: (lead_idx + 1) as! i32,
                     rule: "no-mixed-spaces-and-tabs",
-                    message: "Mixed spaces and tabs found in indentation"
+                    message: "Mixed spaces and tabs found in indentation",
+                    severity: cfg.rules_cfg.mixed_spaces_tabs_sev
                 };
                 out_diags.push(d);
-            } else if target_indent_spaces && leading_tabs > 0 {
-                let d = Diagnostic {
-                    line: line_num,
-                    col: 1,
-                    end_col: (lead_idx + 1) as! i32,
-                    rule: "indent",
-                    message: "Expected space indentation but found tabs"
-                };
-                out_diags.push(d);
-            } else if !target_indent_spaces && leading_spaces > 0 && !is_jsdoc_star_line {
-                let d = Diagnostic {
-                    line: line_num,
-                    col: 1,
-                    end_col: (lead_idx + 1) as! i32,
-                    rule: "indent",
-                    message: "Expected tab indentation but found spaces"
-                };
-                out_diags.push(d);
+            } else if !indent_disabled && cfg.rules_cfg.indent_sev != RuleSeverity.Off {
+                if target_indent_spaces && leading_tabs > 0 {
+                    let d = Diagnostic {
+                        line: line_num,
+                        col: 1,
+                        end_col: (lead_idx + 1) as! i32,
+                        rule: "indent",
+                        message: "Expected space indentation but found tabs",
+                        severity: cfg.rules_cfg.indent_sev
+                    };
+                    out_diags.push(d);
+                } else if !target_indent_spaces && leading_spaces > 0 && !is_jsdoc_star_line {
+                    let d = Diagnostic {
+                        line: line_num,
+                        col: 1,
+                        end_col: (lead_idx + 1) as! i32,
+                        rule: "indent",
+                        message: "Expected tab indentation but found spaces",
+                        severity: cfg.rules_cfg.indent_sev
+                    };
+                    out_diags.push(d);
+                }
             }
         }
 
@@ -431,8 +425,8 @@ fn process_buffer(
                     was_modified = true;
                 }
             } else if line_is_in_multiline_str {
-                // Preserve multiline strings verbatim, only strip \r at end if present
-                if has_cr && raw_line[raw_line.len - 1] == '\r' {
+                // Preserve multiline strings verbatim, only strip \r at end if carriage-return rule not off
+                if has_cr && raw_line[raw_line.len - 1] == '\r' && cfg.rules_cfg.carriage_return_sev != RuleSeverity.Off {
                     out_fixed.append(raw_line[0..raw_line.len - 1]);
                     was_modified = true;
                 } else {
@@ -440,7 +434,7 @@ fn process_buffer(
                 }
             } else {
                 let rest_of_line = trimmed_line[lead_idx..];
-                if indent_disabled {
+                if indent_disabled || cfg.rules_cfg.indent_sev == RuleSeverity.Off {
                     out_fixed.append(trimmed_line);
                 } else {
                     // Indentation conversion
@@ -580,20 +574,21 @@ fn print_help() {
         "      \x1b[1m--fix\x1b[0m                Automatically fix whitespace issues\n",
         "  \x1b[1m-i, --interactive\x1b[0m        Prompt to apply fix for each issue\n",
         "  \x1b[1m-f, --format\x1b[0m <FORMAT>    Use a specific output format (default, agent, stylish)\n",
-        "      \x1b[1m--indent\x1b[0m <MODE>      Set indentation mode (can be specified multiple times):\n",
-        "                             \x1b[32mtabs\x1b[0m            Require tabs (default)\n",
-        "                             \x1b[32m<N>\x1b[0m             Require N spaces (e.g. 2, 4)\n",
-        "                             \x1b[32mauto\x1b[0m            Autodetect per file\n",
-        "                             \x1b[32moff\x1b[0m             Disable indentation check\n",
-        "                             \x1b[32moff.<EXT>\x1b[0m       Disable indentation check for extension\n",
-        "                             \x1b[32mauto.<EXT>\x1b[0m      Autodetect for extension (e.g. auto.yml)\n",
-        "                             \x1b[32m<N>.<EXT>\x1b[0m       Require N spaces for extension (e.g. 2.json)\n",
-        "                             \x1b[32mtabs.<EXT>\x1b[0m      Require tabs for extension (e.g. tabs.go)\n\n",
+        "  \x1b[1m-c, --config\x1b[0m <PATH>      Configuration file (JSON format)\n",
+        "  \x1b[1m-A, --allow\x1b[0m <NAME>       Allow / turn off a rule or category (suppress lint)\n",
+        "  \x1b[1m-W, --warn\x1b[0m <NAME>        Enable a rule or category as warning\n",
+        "  \x1b[1m-D, --deny\x1b[0m <NAME>        Enable a rule or category as error\n",
+        "  \x1b[1m-C\x1b[0m <RULE=VALUE>          Configure rule severity or options (supports JSON array syntax)\n\n",
         "\x1b[1m\x1b[36mExamples:\x1b[0m\n",
         "  spacelint .\n",
         "  spacelint -f agent .\n",
         "  spacelint -f stylish .\n",
-        "  spacelint --indent 2.json --indent 4.py src/\n",
+        "  spacelint -D no-trailing-spaces -W no-carriage-return\n",
+        "  spacelint -A correctness -D no-trailing-spaces\n",
+        "  spacelint -A all -D indent -W no-mixed-spaces-and-tabs\n",
+        "  spacelint -C indent=warn -C no-trailing-spaces=error\n",
+        "  spacelint -C 'indent=[\"error\", 2]'\n",
+        "  spacelint -c .spacelintrc.json src/\n",
         "  cat file.js | spacelint -\n",
         "  cat file.js | spacelint --fix - > fixed.js\n\n",
         "\x1b[1m\x1b[36mStdin / Piping:\x1b[0m\n",
@@ -655,8 +650,11 @@ fn main() {
             match cfg.format {
                 Agent => {
                     for d in diags {
-                        total_warnings++;
-                        print_diagnostic_agent("<stdin>", d.line, d.col, d.rule, d.message);
+                        match d.severity {
+                            Error => { total_errors++; },
+                            _ => { total_warnings++; }
+                        }
+                        print_diagnostic_agent("<stdin>", d.line, d.col, d.rule, d.message, d.severity);
                     }
                 },
                 Stylish => {
@@ -664,7 +662,10 @@ fn main() {
                         var max_line_col_len: i32 = 0;
                         var max_msg_len: i32 = 0;
                         for d in diags {
-                            total_warnings++;
+                            match d.severity {
+                                Error => { total_errors++; },
+                                _ => { total_warnings++; }
+                            }
                             let lc_len = get_num_digits(d.line) + 1 + get_num_digits(d.col);
                             if lc_len > max_line_col_len { max_line_col_len = lc_len; }
                             if (d.message.len as! i32) > max_msg_len { max_msg_len = d.message.len as! i32; }
@@ -672,7 +673,7 @@ fn main() {
                         var s_out: u8[>..] = [];
                         format_stylish_file_header(s_out, "<stdin>");
                         for d in diags {
-                            format_stylish_diagnostic(s_out, d.line, d.col, max_line_col_len, d.rule, d.message, max_msg_len);
+                            format_stylish_diagnostic(s_out, d.line, d.col, max_line_col_len, d.rule, d.message, max_msg_len, d.severity);
                         }
                         write_stdout(s_out);
                     }
@@ -680,14 +681,20 @@ fn main() {
                 },
                 Default => {
                     for d in diags {
-                        total_warnings++;
-                        print_diagnostic("<stdin>", d.line, d.col, d.end_col, d.rule, d.message, "");
+                        match d.severity {
+                            Error => { total_errors++; },
+                            _ => { total_warnings++; }
+                        }
+                        print_diagnostic("<stdin>", d.line, d.col, d.end_col, d.rule, d.message, "", d.severity);
                     }
                     let end_time = clock_ns();
                     let elapsed_ms = (end_time - start_time) / 1000000;
                     print_summary(total_warnings, total_errors, 1, elapsed_ms);
                 }
             }
+        }
+        if total_errors > 0 {
+            exit(1);
         }
         return;
     }
@@ -748,7 +755,10 @@ fn main() {
 
                 var should_fix_file = false;
                 for d in diags {
-                    total_warnings++;
+                    match d.severity {
+                        Error => { total_errors++; },
+                        _ => { total_warnings++; }
+                    }
                     let l_idx = d.line - 1;
                     var line_cnt: u8[>..] = [];
                     if l_idx >= 0 && l_idx < line_starts.len {
@@ -763,7 +773,7 @@ fn main() {
                     }
 
                     var diag_out: u8[>..] = [];
-                    format_diagnostic(diag_out, file_name, d.line, d.col, d.end_col, d.rule, d.message, line_cnt);
+                    format_diagnostic(diag_out, file_name, d.line, d.col, d.end_col, d.rule, d.message, line_cnt, d.severity);
                     write_stdout(diag_out);
 
                     write_stdout("  \x1b[1m\x1b[36mApply fix? [yes / no / all / quit] (default: no):\x1b[0m ");
@@ -801,8 +811,11 @@ fn main() {
                     Agent => {
                         var out_batch: u8[>..] = [];
                         for d in diags {
-                            total_warnings++;
-                            format_diagnostic_agent(out_batch, file_name, d.line, d.col, d.rule, d.message);
+                            match d.severity {
+                                Error => { total_errors++; },
+                                _ => { total_warnings++; }
+                            }
+                            format_diagnostic_agent(out_batch, file_name, d.line, d.col, d.rule, d.message, d.severity);
                             if out_batch.len >= 16384 {
                                 write_stdout(out_batch);
                                 out_batch.clear();
@@ -816,7 +829,10 @@ fn main() {
                         var max_line_col_len: i32 = 0;
                         var max_msg_len: i32 = 0;
                         for d in diags {
-                            total_warnings++;
+                            match d.severity {
+                                Error => { total_errors++; },
+                                _ => { total_warnings++; }
+                            }
                             let lc_len = get_num_digits(d.line) + 1 + get_num_digits(d.col);
                             if lc_len > max_line_col_len { max_line_col_len = lc_len; }
                             if (d.message.len as! i32) > max_msg_len { max_msg_len = d.message.len as! i32; }
@@ -824,7 +840,7 @@ fn main() {
                         var s_out: u8[>..] = [];
                         format_stylish_file_header(s_out, file_name);
                         for d in diags {
-                            format_stylish_diagnostic(s_out, d.line, d.col, max_line_col_len, d.rule, d.message, max_msg_len);
+                            format_stylish_diagnostic(s_out, d.line, d.col, max_line_col_len, d.rule, d.message, max_msg_len, d.severity);
                         }
                         write_stdout(s_out);
                     },
@@ -842,7 +858,10 @@ fn main() {
 
                         var out_batch: u8[>..] = [];
                         for d in diags {
-                            total_warnings++;
+                            match d.severity {
+                                Error => { total_errors++; },
+                                _ => { total_warnings++; }
+                            }
                             let l_idx = d.line - 1;
                             var line_cnt: u8[>..] = [];
                             if l_idx >= 0 && l_idx < line_starts.len {
@@ -856,7 +875,7 @@ fn main() {
                                 }
                             }
 
-                            format_diagnostic(out_batch, file_name, d.line, d.col, d.end_col, d.rule, d.message, line_cnt);
+                            format_diagnostic(out_batch, file_name, d.line, d.col, d.end_col, d.rule, d.message, line_cnt, d.severity);
                             if out_batch.len >= 16384 {
                                 write_stdout(out_batch);
                                 out_batch.clear();
@@ -883,5 +902,9 @@ fn main() {
                 print_summary(total_warnings, total_errors, files_processed, elapsed_ms);
             }
         }
+    }
+
+    if total_errors > 0 {
+        exit(1);
     }
 }

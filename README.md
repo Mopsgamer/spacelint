@@ -4,28 +4,25 @@ A fast, language-aware whitespace linter and fixer CLI written in the [Goose pro
 
 ## Features
 - **Language Aware**: Understands file extensions and rules for TypeScript, JavaScript, JSON, YAML, XML, PROPS, INI, TOML, C++, C, Rust, Zig, Markdown, MDX, Goose, Vlang, D, Lua, Assembly, AssemblyScript, Kotlin, Java, Dart, Odin, Python, Go, Ruby, Shell, PHP, Swift, C#, Scala, CSS, SQL, R, Julia, Perl, Elixir, Erlang, Haskell, Elm, PureScript, GraphQL, Dockerfile, Makefile, Nix, Terraform, Vue, Svelte, Astro, Fortran, Ada, Pascal, OCaml, Clojure, F#, Groovy, PowerShell, Solidity, Nim, Crystal, CMake, Protobuf, Shaders, GameDev, CSV, TSV, and more.
-- **Oxlint Compatible Output**: Diagnostics and summaries formatted with line numbers, code snippets, caret underlines, and timing stats.
+- **Rich Diagnostics Output**: Diagnostics and summaries formatted with line numbers, code snippets, caret underlines, and timing stats.
 - **Multiple Output Formats**:
   - `-f default` / `--format default`: Full visual diagnostics with code snippets and caret underlines.
   - `-f agent` / `--format agent`: Compact, uncolored single-line format (`<file>:<line>:<col>: warning spacelint(<rule>): <message>`).
-  - `-f stylish` / `--format stylish`: ESLint/Oxlint-compatible stylish format with underlined file headers, aligned columns, and summary.
-- **Rules**:
-  - Trailing whitespace detection and fixing (`no-trailing-spaces`).
-  - Carriage return normalization (`no-carriage-return`).
-  - Mixed tabs and spaces detection (`no-mixed-spaces-and-tabs`).
-  - Indentation enforcement (`indent`).
+  - `-f stylish` / `--format stylish`: ESLint-compatible stylish format with underlined file headers, aligned columns, and summary.
+- **Rules & Categories**:
+  - `correctness`: `no-trailing-spaces`, `no-carriage-return`, `no-mixed-spaces-and-tabs`.
+  - `style`: `indent`.
+- **Rule Configuration**:
+  - Turn off rules/categories: `-A` / `--allow` (e.g. `-A no-unused-vars`, `-A correctness`, `-A all`).
+  - Enable rules/categories as warnings: `-W` / `--warn` (e.g. `-W no-debugger`).
+  - Enable rules/categories as errors: `-D` / `--deny` (e.g. `-D no-console`, `-D correctness`).
+  - Configure rule severity and options via `-C` (e.g. `-C indent=2`, `-C 'indent=["error", 2]'`, `-C 'indent=["warn", "auto"]'`).
+  - Configuration file via `-c` / `--config` (e.g. `spacelint -c .spacelintrc.json`).
 - **Comment and Multiline String Awareness**:
   - Multiline comments across syntax styles (`/* ... */`, `<!-- ... -->`, `#`, `;`).
   - JSDoc / TSDoc support: lines inside block comments starting with `*` can use spaces to align the `*` characters without triggering mixed-indentation warnings.
   - Multiline strings / raw literals preserve interior whitespace and embedded comment-like characters verbatim.
 - **Piping Support**: Full support for stdin/stdout streams (e.g. `spacelint --fix > file.txt`).
-- **Flexible Indentation Options**:
-  - `--indent tabs` (default)
-  - `--indent <N>` (e.g. `--indent 2`, `--indent 4`)
-  - `--indent auto` (autodetects tabs vs spaces per file)
-  - `--indent off` (disables indentation checking and fixing)
-  - `--indent off.<ext>` (disables indentation checking for `<ext>`)
-  - `--indent auto.<ext>` (autodetects for files with `<ext>`, tabs for all others)
 
 ## Installation
 

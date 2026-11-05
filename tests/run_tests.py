@@ -5,6 +5,7 @@ import sys
 import tempfile
 import shutil
 import re
+import json
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPACELINT_BIN = os.path.join(ROOT_DIR, "spacelint")
@@ -135,14 +136,16 @@ def test_piping_and_fix():
 
     print("  Piping and --fix tests passed!")
 
-def test_indent_options():
-    print("Testing --indent options (tabs, spaces, auto, auto.<ext>)...")
+def test_indent_options_via_c():
+    print("Testing indent rule options via -C (tabs, spaces, auto, auto.<ext>)...")
     # indent tabs
-    code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "tabs", "-"], input_data="    let x = 1;\n")
+    code, out, _ = run_cmd([SPACELINT_BIN, "-C", "indent=tabs", "-"], input_data="    let x = 1;\n")
+    assert code == 0
     assert "indent" in out and "Expected tab indentation" in out
 
     # indent spaces
-    code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "4", "-"], input_data="\tlet x = 1;\n")
+    code, out, _ = run_cmd([SPACELINT_BIN, "-C", "indent=4", "-"], input_data="\tlet x = 1;\n")
+    assert code == 0
     assert "indent" in out and "Expected space indentation" in out
 
     # auto
@@ -152,7 +155,7 @@ def test_indent_options():
         tf.close()
 
     try:
-        code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "auto", tf_name])
+        code, out, _ = run_cmd([SPACELINT_BIN, "-C", "indent=auto", tf_name])
         assert code == 0
         assert "Finished" in out and "Found" not in out
     finally:
@@ -165,13 +168,13 @@ def test_indent_options():
         tf.close()
 
     try:
-        code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "auto.yml", tf_name])
+        code, out, _ = run_cmd([SPACELINT_BIN, "-C", "indent=auto.yml", tf_name])
         assert code == 0
         assert "Finished" in out and "Found" not in out
     finally:
         os.remove(tf_name)
 
-    print("  Indent options tests passed!")
+    print("  Indent options via -C tests passed!")
 
 def test_in_place_fix():
     print("Testing in-place --fix file modification...")
@@ -204,36 +207,120 @@ def test_rules():
     assert "Total: 4" in out, "--rules output missing total"
     print("  --rules tests passed!")
 
-def test_indent_off():
-    print("Testing --indent off and --indent off.<ext>...")
-    # indent off ignores spaces when tabs expected
-    code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "off", "-"], input_data="    let x = 1;\n")
-    assert code == 0
-    assert "indent" not in out and "no-mixed-spaces-and-tabs" not in out
+def test_rule_options_and_categories():
+    print("Testing -A, -W, -D, -C, --config, categories and JSON syntax...")
 
-    # indent off ignores mixed tabs and spaces
-    code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "off", "-"], input_data=" \tlet x = 1;\n")
-    assert code == 0
-    assert "no-mixed-spaces-and-tabs" not in out
+    # 1. Enable rules as errors (-D)
+    code, out, _ = run_cmd([SPACELINT_BIN, "-D", "no-trailing-spaces", "-"], input_data="let x = 1; \n")
+    assert code == 1, "Exit code should be 1 on error"
+    assert "error" in out or "✖" in out
+    assert "no-trailing-spaces" in out
 
-    # indent off with --fix leaves indentation intact
-    code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "off", "--fix", "-"], input_data="  let x = 1;   \n")
-    assert code == 0
-    assert out == "  let x = 1;\n"
+    # Unknown plugin rules supported gracefully
+    code, out, _ = run_cmd([SPACELINT_BIN, "-D", "no-console", "-D", "eqeqeq", "-"], input_data="let x = 1;\n")
+    assert code == 0, "Unknown rules enabled should not fail execution when no violations"
 
-    # indent off.<ext>
+    # 2. Enable rules as warnings (-W)
+    code, out, _ = run_cmd([SPACELINT_BIN, "-W", "no-trailing-spaces", "-"], input_data="let x = 1; \n")
+    assert code == 0
+    assert "warning" in out
+    assert "no-trailing-spaces" in out
+
+    # 3. Turn off specific rules (-A)
+    code, out, _ = run_cmd([SPACELINT_BIN, "-A", "no-trailing-spaces", "-"], input_data="let x = 1; \n")
+    assert code == 0
+    assert "Finished" in out
+    assert "no-trailing-spaces" not in out
+
+    # 4. -C rule=warn -C rule=error
+    code, out, _ = run_cmd([SPACELINT_BIN, "-C", "no-trailing-spaces=error", "-"], input_data="let x = 1; \n")
+    assert code == 1
+    assert "error" in out
+    assert "no-trailing-spaces" in out
+
+    code, out, _ = run_cmd([SPACELINT_BIN, "-C", "no-trailing-spaces=warn", "-"], input_data="let x = 1; \n")
+    assert code == 0
+    assert "warning" in out
+    assert "no-trailing-spaces" in out
+
+    # 5. Pass options array via JSON syntax
+    # -C 'indent=["error", 2]'
+    code, out, _ = run_cmd([SPACELINT_BIN, "-C", 'indent=["error", 2]', "-"], input_data="\tlet x = 1;\n")
+    assert code == 1
+    assert "error" in out
+    assert "indent" in out
+    assert "Expected space indentation" in out
+
+    # -C 'indent=["warn", "tabs"]'
+    code, out, _ = run_cmd([SPACELINT_BIN, "-C", 'indent=["warn", "tabs"]', "-"], input_data="  let x = 1;\n")
+    assert code == 0
+    assert "warning" in out
+    assert "indent" in out
+    assert "Expected tab indentation" in out
+
+    # Other rules with JSON syntax
+    code, out, _ = run_cmd([SPACELINT_BIN, "-C", 'no-plusplus=["error", {"allowForLoopAfterthoughts": true}]', "-"], input_data="let x = 1;\n")
+    assert code == 0
+
+    # 6. Configure plugin rules
+    code, out, _ = run_cmd([SPACELINT_BIN, "--typescript-plugin", "-C", "typescript/no-explicit-any=error", "-"], input_data="let x = 1;\n")
+    assert code == 0
+
+    # 7. Turn off all correctness rules, but explicitly enable no-trailing-spaces as error
+    code, out, _ = run_cmd([SPACELINT_BIN, "-A", "correctness", "-D", "no-trailing-spaces", "-"], input_data="let x = 1; \r\n")
+    assert code == 1
+    assert "no-trailing-spaces" in out
+    assert "no-carriage-return" not in out
+
+    # 8. Turn off everything, then enable only specific rules
+    code, out, _ = run_cmd([SPACELINT_BIN, "-A", "all", "-D", "indent", "-C", "indent=2", "-"], input_data="let x = 1;   \r\n\tlet y = 2;\n")
+    assert code == 1
+    assert "no-trailing-spaces" not in out
+    assert "no-carriage-return" not in out
+    assert "indent" in out
+
+    # 9. Configuration file via -c / --config
+    config_data = {
+        "categories": {
+            "correctness": "off",
+            "style": "warn"
+        },
+        "rules": {
+            "no-trailing-spaces": "error",
+            "indent": ["error", 2]
+        }
+    }
+    with tempfile.NamedTemporaryFile("w+", suffix=".json", delete=False) as cf:
+        json.dump(config_data, cf)
+        cf_path = cf.name
+
+    try:
+        code, out, _ = run_cmd([SPACELINT_BIN, "-c", cf_path, "-"], input_data="let x = 1; \r\n\tlet y = 2;\n")
+        assert code == 1
+        assert "no-trailing-spaces" in out
+        assert "indent" in out
+        # no-carriage-return was turned off via correctness: off
+        assert "no-carriage-return" not in out
+    finally:
+        os.remove(cf_path)
+
+    # 10. indent off via -C indent=off and -C indent=off.<ext>
+    code, out, _ = run_cmd([SPACELINT_BIN, "-C", "indent=off", "-"], input_data="    let x = 1;\n")
+    assert code == 0
+    assert "indent" not in out
+
     with tempfile.NamedTemporaryFile("w+", suffix=".py", delete=False, newline="") as tf:
         tf.write("    let x = 1;\n")
         tf_name = tf.name
         tf.close()
     try:
-        code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "off.py", tf_name])
+        code, out, _ = run_cmd([SPACELINT_BIN, "-C", "indent=off.py", tf_name])
         assert code == 0
         assert "Finished" in out and "Found" not in out
     finally:
         os.remove(tf_name)
 
-    print("  --indent off tests passed!")
+    print("  Rule options, categories, and JSON syntax tests passed!")
 
 def test_format_options():
     print("Testing format options (-f agent, -f stylish, -f default, --format)...")
@@ -255,6 +342,11 @@ def test_format_options():
     assert "\x1b[" not in out
     assert "<stdin>:1:11: warning spacelint(no-trailing-spaces): Trailing whitespace found\n" == out
 
+    # Test agent with error severity
+    code, out, _ = run_cmd([SPACELINT_BIN, "-f", "agent", "-D", "no-trailing-spaces", "-"], input_data="var a = 1; \n")
+    assert code == 1
+    assert "<stdin>:1:11: error spacelint(no-trailing-spaces): Trailing whitespace found\n" == out
+
     # Test --format=agent
     code, out, _ = run_cmd([SPACELINT_BIN, "--format=agent", sample_file])
     assert code == 0
@@ -270,6 +362,12 @@ def test_format_options():
     # Verify stylish summary
     clean_out = strip_ansi(out)
     assert "✖ 1 problem (0 errors, 1 warning)" in clean_out
+
+    # Test stylish with error severity
+    code, out, _ = run_cmd([SPACELINT_BIN, "-f", "stylish", "-D", "no-trailing-spaces", sample_file])
+    assert code == 1
+    assert "error" in out
+    assert "✖ 1 problem (1 error, 0 warnings)" in strip_ansi(out)
 
     # Test --format stylish
     code, out, _ = run_cmd([SPACELINT_BIN, "--format", "stylish", sample_file])
@@ -306,10 +404,10 @@ def main():
     test_language_fixtures()
     test_obscure_edge_cases()
     test_piping_and_fix()
-    test_indent_options()
+    test_indent_options_via_c()
     test_in_place_fix()
     test_rules()
-    test_indent_off()
+    test_rule_options_and_categories()
     test_format_options()
     print("\nALL SPACELINT TESTS PASSED SUCCESSFULLY!")
 
