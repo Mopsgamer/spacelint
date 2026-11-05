@@ -86,7 +86,8 @@ fn process_buffer(
     // State for tracking multiline block comments and multiline strings
     var in_block_comment = false;
     var in_multiline_str = false;
-    var str_delimiter: u8 = 0; // '`', '"', etc.
+    var str_delimiter: u8 = 0; // '`', '"', '\'', ']'
+    var str_delimiter_len: i32 = 1; // 1 for `, 2 for ]], 3 for """ or '''
     var was_modified = false;
 
     // Scan lines
@@ -128,17 +129,62 @@ fn process_buffer(
             let c = trimmed_line[idx];
             if in_multiline_str {
                 // Look for ending delimiter
-                if c == str_delimiter {
-                    // Check for escape
-                    if idx == 0 || trimmed_line[idx - 1] != '\\' {
+                if str_delimiter_len == 3 {
+                    if idx + 2 < trimmed_line.len && trimmed_line[idx] == str_delimiter && trimmed_line[idx + 1] == str_delimiter && trimmed_line[idx + 2] == str_delimiter {
+                        if idx == 0 || trimmed_line[idx - 1] != '\\' {
+                            in_multiline_str = false;
+                            idx += 2;
+                        }
+                    }
+                } else if str_delimiter_len == 2 {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == ']' && trimmed_line[idx + 1] == ']' {
                         in_multiline_str = false;
+                        idx += 1;
+                    }
+                } else {
+                    if c == str_delimiter {
+                        // Check for escape
+                        if idx == 0 || trimmed_line[idx - 1] != '\\' {
+                            in_multiline_str = false;
+                        }
                     }
                 }
             } else if in_block_comment {
-                if language == Lang.XML {
+                if language == Lang.XML || language == Lang.Markdown || language == Lang.MDX || language == Lang.Vue || language == Lang.Svelte || language == Lang.Astro || language == Lang.GoTemplate {
                     if idx + 2 < trimmed_line.len && trimmed_line[idx] == '-' && trimmed_line[idx + 1] == '-' && trimmed_line[idx + 2] == '>' {
                         in_block_comment = false;
                         idx += 2;
+                    } else if idx + 1 < trimmed_line.len && trimmed_line[idx] == '*' && trimmed_line[idx + 1] == '/' {
+                        in_block_comment = false;
+                        idx += 1;
+                    } else if idx + 2 < trimmed_line.len && trimmed_line[idx] == '*' && trimmed_line[idx + 1] == '/' && trimmed_line[idx + 2] == '}' {
+                        in_block_comment = false;
+                        idx += 2;
+                    }
+                } else if language == Lang.Haskell || language == Lang.Elm || language == Lang.PureScript {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == '-' && trimmed_line[idx + 1] == '}' {
+                        in_block_comment = false;
+                        idx += 1;
+                    }
+                } else if language == Lang.OCaml || language == Lang.FSharp || language == Lang.Pascal || language == Lang.Wolfram {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == '*' && trimmed_line[idx + 1] == ')' {
+                        in_block_comment = false;
+                        idx += 1;
+                    }
+                } else if language == Lang.Nim {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == ']' && trimmed_line[idx + 1] == '#' {
+                        in_block_comment = false;
+                        idx += 1;
+                    }
+                } else if language == Lang.PowerShell {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == '#' && trimmed_line[idx + 1] == '>' {
+                        in_block_comment = false;
+                        idx += 1;
+                    }
+                } else if language == Lang.Lua {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == ']' && trimmed_line[idx + 1] == ']' {
+                        in_block_comment = false;
+                        idx += 1;
                     }
                 } else {
                     if idx + 1 < trimmed_line.len && trimmed_line[idx] == '*' && trimmed_line[idx + 1] == '/' {
@@ -149,21 +195,104 @@ fn process_buffer(
             } else {
                 // Not in multiline string or comment
                 // Check for block comment start
-                if language == Lang.XML {
+                if language == Lang.XML || language == Lang.Markdown || language == Lang.MDX || language == Lang.Vue || language == Lang.Svelte || language == Lang.Astro || language == Lang.GoTemplate {
                     if idx + 3 < trimmed_line.len && trimmed_line[idx] == '<' && trimmed_line[idx + 1] == '!' && trimmed_line[idx + 2] == '-' && trimmed_line[idx + 3] == '-' {
                         in_block_comment = true;
                         idx += 3;
+                    } else if idx + 3 < trimmed_line.len && trimmed_line[idx] == '{' && trimmed_line[idx + 1] == '{' && trimmed_line[idx + 2] == '/' && trimmed_line[idx + 3] == '*' {
+                        in_block_comment = true;
+                        idx += 3;
+                    } else if idx + 1 < trimmed_line.len && trimmed_line[idx] == '/' && trimmed_line[idx + 1] == '*' {
+                        in_block_comment = true;
+                        idx += 1;
+                    } else if idx + 1 < trimmed_line.len && trimmed_line[idx] == '/' && trimmed_line[idx + 1] == '/' {
+                        break;
                     }
-                } else if language == Lang.TypeScript || language == Lang.JavaScript || language == Lang.CPP || language == Lang.C || language == Lang.Rust || language == Lang.Zig || language == Lang.JSON {
+                } else if language == Lang.Haskell || language == Lang.Elm || language == Lang.PureScript {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == '{' && trimmed_line[idx + 1] == '-' {
+                        in_block_comment = true;
+                        idx += 1;
+                    } else if idx + 1 < trimmed_line.len && trimmed_line[idx] == '-' && trimmed_line[idx + 1] == '-' {
+                        break;
+                    }
+                } else if language == Lang.OCaml || language == Lang.FSharp || language == Lang.Pascal || language == Lang.Wolfram {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == '(' && trimmed_line[idx + 1] == '*' {
+                        in_block_comment = true;
+                        idx += 1;
+                    } else if idx + 1 < trimmed_line.len && (language == Lang.FSharp || language == Lang.Pascal) && trimmed_line[idx] == '/' && trimmed_line[idx + 1] == '/' {
+                        break;
+                    }
+                } else if language == Lang.Nim {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == '#' && trimmed_line[idx + 1] == '[' {
+                        in_block_comment = true;
+                        idx += 1;
+                    } else if c == '#' {
+                        break;
+                    }
+                } else if language == Lang.PowerShell {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == '<' && trimmed_line[idx + 1] == '#' {
+                        in_block_comment = true;
+                        idx += 1;
+                    } else if c == '#' {
+                        break;
+                    }
+                } else if language == Lang.Lua {
+                    if idx + 3 < trimmed_line.len && trimmed_line[idx] == '-' && trimmed_line[idx + 1] == '-' && trimmed_line[idx + 2] == '[' && trimmed_line[idx + 3] == '[' {
+                        in_block_comment = true;
+                        idx += 3;
+                    } else if idx + 1 < trimmed_line.len && trimmed_line[idx] == '-' && trimmed_line[idx + 1] == '-' {
+                        // Lua line comment to end of line
+                        break;
+                    }
+                } else if language == Lang.SQL || language == Lang.Ada || language == Lang.VHDL || language == Lang.Dhall {
+                    if idx + 1 < trimmed_line.len && (language == Lang.SQL || language == Lang.Dhall) && trimmed_line[idx] == '/' && trimmed_line[idx + 1] == '*' {
+                        in_block_comment = true;
+                        idx += 1;
+                    } else if idx + 1 < trimmed_line.len && trimmed_line[idx] == '-' && trimmed_line[idx + 1] == '-' {
+                        break;
+                    }
+                } else if language == Lang.TypeScript || language == Lang.JavaScript || language == Lang.CPP || language == Lang.C || language == Lang.Rust || language == Lang.Zig || language == Lang.JSON || language == Lang.Goose || language == Lang.Vlang || language == Lang.D || language == Lang.AssemblyScript || language == Lang.Kotlin || language == Lang.Java || language == Lang.Dart || language == Lang.Odin || language == Lang.Go || language == Lang.Swift || language == Lang.CSharp || language == Lang.Scala || language == Lang.CSS || language == Lang.PHP || language == Lang.Solidity || language == Lang.Protobuf || language == Lang.Shader || language == Lang.Groovy || language == Lang.Haxe || language == Lang.Typst || language == Lang.KDL || language == Lang.CUE || language == Lang.Verilog || language == Lang.Apex || language == Lang.Ballerina || language == Lang.Ceylon || language == Lang.Chapel || language == Lang.Hack || language == Lang.QML || language == Lang.ReasonML || language == Lang.Rescript || language == Lang.Vala || language == Lang.Xtend || language == Lang.GameDev {
                     if idx + 1 < trimmed_line.len && trimmed_line[idx] == '/' && trimmed_line[idx + 1] == '*' {
                         in_block_comment = true;
                         idx += 1;
                     } else if idx + 1 < trimmed_line.len && trimmed_line[idx] == '/' && trimmed_line[idx + 1] == '/' {
                         // Line comment to end of line
                         break;
+                    } else if (language == Lang.PHP || language == Lang.Hack) && c == '#' {
+                        break;
                     }
-                } else if language == Lang.YAML || language == Lang.INI || language == Lang.TOML || language == Lang.PROPS {
-                    if c == '#' || (language == Lang.INI && c == ';') {
+                } else if language == Lang.Papyrus {
+                    if c == ';' {
+                        break;
+                    }
+                } else if language == Lang.YAML || language == Lang.INI || language == Lang.TOML || language == Lang.PROPS || language == Lang.Python || language == Lang.Ruby || language == Lang.Shell || language == Lang.R || language == Lang.Julia || language == Lang.Perl || language == Lang.Elixir || language == Lang.GraphQL || language == Lang.Dockerfile || language == Lang.Makefile || language == Lang.Nix || language == Lang.Terraform || language == Lang.Crystal || language == Lang.CMake || language == Lang.Tcl || language == Lang.Awk || language == Lang.CoffeeScript || language == Lang.Mojo || language == Lang.Jsonnet || language == Lang.Rego || language == Lang.GDScript || language == Lang.MoonScript || language == Lang.Raku || language == Lang.Starlark {
+                    if idx + 1 < trimmed_line.len && (language == Lang.Terraform || language == Lang.Jsonnet) && trimmed_line[idx] == '/' && trimmed_line[idx + 1] == '*' {
+                        in_block_comment = true;
+                        idx += 1;
+                    } else if idx + 1 < trimmed_line.len && (language == Lang.Terraform || language == Lang.Jsonnet) && trimmed_line[idx] == '/' && trimmed_line[idx + 1] == '/' {
+                        break;
+                    } else if c == '#' || (language == Lang.INI && c == ';') {
+                        // Line comment to end of line
+                        break;
+                    }
+                } else if language == Lang.Cobol {
+                    if idx + 1 < trimmed_line.len && trimmed_line[idx] == '*' && trimmed_line[idx + 1] == '>' {
+                        break;
+                    }
+                } else if language == Lang.Smalltalk {
+                    if c == '"' {
+                        break;
+                    }
+                } else if language == Lang.Erlang {
+                    if c == '%' {
+                        break;
+                    }
+                } else if language == Lang.Fortran {
+                    if c == '!' {
+                        break;
+                    }
+                } else if language == Lang.Assembly || language == Lang.Clojure {
+                    if c == ';' || (language == Lang.Assembly && c == '#') {
                         // Line comment to end of line
                         break;
                     }
@@ -171,17 +300,34 @@ fn process_buffer(
 
                 // Check for multiline string start
                 if !in_block_comment {
-                    if (language == Lang.TypeScript || language == Lang.JavaScript) && c == '`' {
+                    if (language == Lang.TypeScript || language == Lang.JavaScript || language == Lang.Goose || language == Lang.Go || language == Lang.Markdown || language == Lang.MDX || language == Lang.AssemblyScript || language == Lang.Vue || language == Lang.Svelte || language == Lang.Astro || language == Lang.Nix) && c == '`' {
                         in_multiline_str = true;
                         str_delimiter = '`';
-                    } else if language == Lang.TOML && idx + 2 < trimmed_line.len && trimmed_line[idx] == '"' && trimmed_line[idx + 1] == '"' && trimmed_line[idx + 2] == '"' {
+                        str_delimiter_len = 1;
+                    } else if (language == Lang.CSV || language == Lang.TSV) && c == '"' {
                         in_multiline_str = true;
                         str_delimiter = '"';
+                        str_delimiter_len = 1;
+                    } else if (language == Lang.TOML || language == Lang.Kotlin || language == Lang.Python || language == Lang.Elixir || language == Lang.Julia || language == Lang.GraphQL) && idx + 2 < trimmed_line.len && trimmed_line[idx] == '"' && trimmed_line[idx + 1] == '"' && trimmed_line[idx + 2] == '"' {
+                        in_multiline_str = true;
+                        str_delimiter = '"';
+                        str_delimiter_len = 3;
+                        idx += 2;
+                    } else if (language == Lang.Python || language == Lang.Elixir) && idx + 2 < trimmed_line.len && trimmed_line[idx] == '\'' && trimmed_line[idx + 1] == '\'' && trimmed_line[idx + 2] == '\'' {
+                        in_multiline_str = true;
+                        str_delimiter = '\'';
+                        str_delimiter_len = 3;
                         idx += 2;
                     } else if language == Lang.Rust && idx + 2 < trimmed_line.len && trimmed_line[idx] == 'r' && trimmed_line[idx + 1] == '#' && trimmed_line[idx + 2] == '"' {
                         in_multiline_str = true;
                         str_delimiter = '"';
+                        str_delimiter_len = 1;
                         idx += 2;
+                    } else if language == Lang.Lua && idx + 1 < trimmed_line.len && trimmed_line[idx] == '[' && trimmed_line[idx + 1] == '[' {
+                        in_multiline_str = true;
+                        str_delimiter = ']';
+                        str_delimiter_len = 2;
+                        idx += 1;
                     }
                 }
             }
@@ -425,7 +571,7 @@ fn print_help() {
         "  Pass \"\x1b[1m-\x1b[0m\" as path to read from standard input (e.g. \x1b[2mcat file | spacelint -\x1b[0m).\n",
         "  Use with \x1b[1m--fix\x1b[0m to write fixed output directly to stdout.\n\n",
         "\x1b[1m\x1b[36mSupported file types:\x1b[0m\n",
-        "  \x1b[2mTypeScript, JavaScript, JSON, YAML, XML, PROPS, INI, TOML, C++, C, Rust, Zig, etc.\x1b[0m\n"
+        "  \x1b[2mTypeScript, JavaScript, JSON, YAML, XML, PROPS, INI, TOML, C++, C, Rust, Zig, Markdown, MDX, Goose, Vlang, D, Lua, Assembly, AssemblyScript, Kotlin, Java, Dart, Odin, Python, Go, Ruby, Shell, PHP, Swift, C#, Scala, CSS, SQL, R, Julia, Perl, Elixir, Erlang, Haskell, Elm, PureScript, GraphQL, Dockerfile, Makefile, Nix, Terraform, Vue, Svelte, Astro, Fortran, Ada, Pascal, OCaml, Clojure, F#, Groovy, PowerShell, Solidity, Nim, Crystal, CMake, Protobuf, Shaders, GameDev, CSV, TSV, etc.\x1b[0m\n"
     );
     write_stdout(out);
 }

@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import shutil
+import re
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPACELINT_BIN = os.path.join(ROOT_DIR, "spacelint")
@@ -20,17 +21,22 @@ def run_cmd(cmd, input_data=None):
     )
     return proc.returncode, proc.stdout.decode("utf-8", errors="replace"), proc.stderr.decode("utf-8", errors="replace")
 
+def strip_ansi(text):
+    return re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', text)
+
 def test_cli_flags():
     print("Testing CLI flags...")
     # --help
     code, out, _ = run_cmd([SPACELINT_BIN, "--help"])
     assert code == 0, f"--help failed: code={code}"
-    assert "Usage: spacelint" in out, "--help output missing usage"
+    clean_out = strip_ansi(out)
+    assert "Usage: spacelint" in clean_out, "--help output missing usage"
 
     # -h
     code, out, _ = run_cmd([SPACELINT_BIN, "-h"])
     assert code == 0, f"-h failed: code={code}"
-    assert "Usage: spacelint" in out, "-h output missing usage"
+    clean_out = strip_ansi(out)
+    assert "Usage: spacelint" in clean_out, "-h output missing usage"
 
     # --version
     code, out, _ = run_cmd([SPACELINT_BIN, "--version"])
@@ -49,7 +55,26 @@ def test_language_fixtures():
     fixtures = [
         "test.ts", "test.js", "test.json", "test.yaml", "test.xml",
         "test.properties", "test.ini", "test.toml", "test.cpp", "test.c",
-        "test.rs", "test.zig"
+        "test.rs", "test.zig", "test.md", "test.mdx", "test.goose",
+        "test.v", "test.d", "test.lua", "test.asm", "test.as",
+        "test.kt", "test.java", "test.dart", "test.odin", "test.py",
+        "test.go", "test.rb", "test.sh", "test.php", "test.swift",
+        "test.cs", "test.scala", "test.css", "test.sql", "test.r",
+        "test.jl", "test.pl", "test.ex", "test.erl", "test.hs",
+        "test.elm", "test.purs", "test.graphql", "Dockerfile",
+        "Makefile", "test.nix", "test.tf", "test.vue", "test.svelte",
+        "test.astro", "test.f90", "test.adb", "test.pas", "test.ml",
+        "test.clj", "test.fs", "test.groovy", "test.ps1", "test.sol",
+        "test.nim", "test.cr", "CMakeLists.txt", "test.proto", "test.glsl",
+        "test.tcl", "test.awk", "test.cob", "test.st", "test.vhdl",
+        "test.coffee", "test.hx", "test.mojo", "test.jsonnet", "test.dhall",
+        "test.typ", "test.kdl", "test.cue", "test.rego",
+        "test.gotmpl", "test.pcss", "test.styl",
+        "test.cls", "test.bal", "test.chpl", "test.gd",
+        "test.qml", "test.raku", "test.res", "test.bzl",
+        "test.vala", "test.wl", "test.hlsl", "test.metal",
+        "test.gdshader", "test.gml", "test.wren", "test.nut",
+        "test.psc", "test.qc", "test.csv", "test.tsv"
     ]
     for fix in fixtures:
         path = os.path.join(FIXTURES_DIR, fix)
@@ -66,13 +91,34 @@ def test_obscure_edge_cases():
     path_str = os.path.join(FIXTURES_DIR, "obscure_comment_in_multiline_str.ts")
     code, out, _ = run_cmd([SPACELINT_BIN, path_str])
     assert code == 0
-    assert "Found 0 warnings and 0 errors" in out, f"Should have 0 warnings, got:\n{out}"
+    assert "Finished" in out and "Found" not in out, f"Should have 0 warnings, got:\n{out}"
 
     # 2. JSDoc / TSDoc space-aligned asterisk comments
     path_jsdoc = os.path.join(FIXTURES_DIR, "obscure_jsdoc_star_align.ts")
     code, out, _ = run_cmd([SPACELINT_BIN, path_jsdoc])
     assert code == 0
-    assert "Found 0 warnings and 0 errors" in out, f"Should have 0 warnings for JSDoc, got:\n{out}"
+    assert "Finished" in out and "Found" not in out, f"Should have 0 warnings for JSDoc, got:\n{out}"
+
+    # 3. Triple-quote multiline string containing single quotes and double quotes
+    with tempfile.NamedTemporaryFile("w+", suffix=".py", delete=False) as tf:
+        tf.write('"""\nInside multiline string with \'single\' and "double" quote.\n# not a comment\n"""\n')
+        tf_name = tf.name
+    try:
+        code, out, _ = run_cmd([SPACELINT_BIN, tf_name])
+        assert code == 0
+        assert "Finished" in out and "Found" not in out, f"Should have 0 warnings for multiline quotes, got:\n{out}"
+    finally:
+        os.remove(tf_name)
+
+    # 4. Long filename (> 64 chars)
+    long_name = "test_very_long_file_name_exceeding_sixty_four_characters_for_safety_check.py"
+    with tempfile.TemporaryDirectory() as td:
+        fpath = os.path.join(td, long_name)
+        with open(fpath, "w") as f:
+            f.write('print("OK")\n')
+        code, out, _ = run_cmd([SPACELINT_BIN, fpath])
+        assert code == 0
+        assert "Finished" in out and "Found" not in out, f"Long filename failed: {out}"
 
     print("  Obscure edge case tests passed!")
 
@@ -108,7 +154,7 @@ def test_indent_options():
     try:
         code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "auto", tf_name])
         assert code == 0
-        assert "Found 0 warnings and 0 errors" in out
+        assert "Finished" in out and "Found" not in out
     finally:
         os.remove(tf_name)
 
@@ -121,7 +167,7 @@ def test_indent_options():
     try:
         code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "auto.yml", tf_name])
         assert code == 0
-        assert "Found 0 warnings and 0 errors" in out
+        assert "Finished" in out and "Found" not in out
     finally:
         os.remove(tf_name)
 
