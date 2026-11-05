@@ -32,11 +32,10 @@ jobs:
           DOWNLOAD_URL="https://github.com/aardappel/goose/releases/download/${GOOSE_VERSION}/goose-${GOOSE_VERSION}-linux-x64.tar.gz"
           echo "Downloading Goose from ${DOWNLOAD_URL}..."
           curl -sSL -o goose_pkg.tar.gz "${DOWNLOAD_URL}"
-          mkdir -p /tmp/goose_bin
-          tar -xzf goose_pkg.tar.gz -C /tmp/goose_bin
-          GOOSE_BIN=$(find /tmp/goose_bin -name goose -type f | head -n 1)
-          sudo mv "$GOOSE_BIN" /usr/local/bin/goose
-          sudo chmod +x /usr/local/bin/goose
+          sudo mkdir -p /opt/goose
+          sudo tar -xzf goose_pkg.tar.gz -C /opt/goose --strip-components=1
+          sudo ln -sf /opt/goose/goose /usr/local/bin/goose
+          echo "GOOSE_STDLIB=/opt/goose/stdlib" >> "$GITHUB_ENV"
           goose version
 
       - name: Build spacelint (linux-x64)
@@ -71,11 +70,10 @@ jobs:
           GOOSE_VERSION="v2026.3"
           DOWNLOAD_URL="https://github.com/aardappel/goose/releases/download/${GOOSE_VERSION}/goose-${GOOSE_VERSION}-linux-x64.tar.gz"
           curl -sSL -o goose_pkg.tar.gz "${DOWNLOAD_URL}"
-          mkdir -p /tmp/goose_bin
-          tar -xzf goose_pkg.tar.gz -C /tmp/goose_bin
-          GOOSE_BIN=$(find /tmp/goose_bin -name goose -type f | head -n 1)
-          sudo mv "$GOOSE_BIN" /usr/local/bin/goose
-          sudo chmod +x /usr/local/bin/goose
+          sudo mkdir -p /opt/goose
+          sudo tar -xzf goose_pkg.tar.gz -C /opt/goose --strip-components=1
+          sudo ln -sf /opt/goose/goose /usr/local/bin/goose
+          echo "GOOSE_STDLIB=/opt/goose/stdlib" >> "$GITHUB_ENV"
           goose version
           sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
 
@@ -108,11 +106,10 @@ jobs:
           GOOSE_VERSION="v2026.3"
           DOWNLOAD_URL="https://github.com/aardappel/goose/releases/download/${GOOSE_VERSION}/goose-${GOOSE_VERSION}-macos-x64.tar.gz"
           curl -sSL -o goose_pkg.tar.gz "${DOWNLOAD_URL}"
-          mkdir -p /tmp/goose_bin
-          tar -xzf goose_pkg.tar.gz -C /tmp/goose_bin
-          GOOSE_BIN=$(find /tmp/goose_bin -name goose -type f | head -n 1)
-          sudo mv "$GOOSE_BIN" /usr/local/bin/goose
-          sudo chmod +x /usr/local/bin/goose
+          sudo mkdir -p /opt/goose
+          sudo tar -xzf goose_pkg.tar.gz -C /opt/goose --strip-components=1
+          sudo ln -sf /opt/goose/goose /usr/local/bin/goose
+          echo "GOOSE_STDLIB=/opt/goose/stdlib" >> "$GITHUB_ENV"
           goose version
 
       - name: Build spacelint (darwin-x64)
@@ -144,11 +141,10 @@ jobs:
           GOOSE_VERSION="v2026.3"
           DOWNLOAD_URL="https://github.com/aardappel/goose/releases/download/${GOOSE_VERSION}/goose-${GOOSE_VERSION}-macos-arm64.tar.gz"
           curl -sSL -o goose_pkg.tar.gz "${DOWNLOAD_URL}"
-          mkdir -p /tmp/goose_bin
-          tar -xzf goose_pkg.tar.gz -C /tmp/goose_bin
-          GOOSE_BIN=$(find /tmp/goose_bin -name goose -type f | head -n 1)
-          sudo mv "$GOOSE_BIN" /usr/local/bin/goose
-          sudo chmod +x /usr/local/bin/goose
+          sudo mkdir -p /opt/goose
+          sudo tar -xzf goose_pkg.tar.gz -C /opt/goose --strip-components=1
+          sudo ln -sf /opt/goose/goose /usr/local/bin/goose
+          echo "GOOSE_STDLIB=/opt/goose/stdlib" >> "$GITHUB_ENV"
           goose version
 
       - name: Build spacelint (darwin-arm64)
@@ -182,12 +178,17 @@ jobs:
           $DOWNLOAD_URL = "https://github.com/aardappel/goose/releases/download/$GOOSE_VERSION/goose-$GOOSE_VERSION-windows-x64.zip"
           Write-Host "Downloading Goose from $DOWNLOAD_URL..."
           Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile goose_pkg.zip
-          Expand-Archive -Path goose_pkg.zip -DestinationPath goose_extracted
-          $gooseExe = Get-ChildItem -Path goose_extracted -Filter "goose.exe" -Recurse | Select-Object -First 1
-          $targetDir = "$HOME\bin"
+          $targetDir = "$HOME\goose"
           New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
-          Copy-Item $gooseExe.FullName -Destination "$targetDir\goose.exe"
+          Expand-Archive -Path goose_pkg.zip -DestinationPath $targetDir
+          # If archive contains a top-level folder, ensure stdlib and goose.exe are accessible
+          if (-not (Test-Path "$targetDir\goose.exe")) {
+            $inner = Get-ChildItem -Path $targetDir -Filter "goose.exe" -Recurse | Select-Object -First 1
+            $innerDir = $inner.DirectoryName
+            Copy-Item "$innerDir\*" -Destination $targetDir -Recurse -Force
+          }
           Add-Content $env:GITHUB_PATH "$targetDir"
+          Add-Content $env:GITHUB_ENV "GOOSE_STDLIB=$targetDir\stdlib"
           & "$targetDir\goose.exe" version
 
       - name: Build spacelint (windows-x64)
