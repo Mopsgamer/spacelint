@@ -30,14 +30,18 @@ A fast, language-aware whitespace linter and fixer CLI written in the [Goose pro
 ### Using Packslip (Recommended)
 
 If you have [packslip](https://packslip.dev) or [mise](https://mise.jdx.dev) installed:
+
 ```bash
 packslip install github.com/Mopsgamer/spacelint
+mise use -g packlist:github.com/Mopsgamer/spacelint
 ```
+
 Packslip verifies the cryptographic sigstore attestation (`packslip.sigstore.json`), downloads the appropriate binary for your OS and architecture, and links it into `~/.local/bin/`.
 
 ### In Termux (Android)
 
 Termux runs Linux on ARM64. You can install via packslip or download the binary directly:
+
 ```bash
 # Direct download into Termux bin
 curl -fsSL -o $PREFIX/bin/spacelint https://github.com/Mopsgamer/spacelint/releases/latest/download/spacelint-linux-arm64
@@ -73,6 +77,7 @@ goose build spacelint.goose
 ```
 
 To run tests:
+
 ```bash
 python3 tests/run_tests.py
 ```
