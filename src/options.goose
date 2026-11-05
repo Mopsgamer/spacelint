@@ -38,10 +38,7 @@ fn parse_indent_val(val: const u8[:]) -> IndentKind {
         var dot_idx = -1;
         var i = 0;
         while i < val.len {
-            if val[i] == '.' {
-                dot_idx = i;
-                break;
-            }
+            if val[i] == '.' { dot_idx = i; break; }
             i++;
         }
 
@@ -57,9 +54,7 @@ fn parse_indent_val(val: const u8[:]) -> IndentKind {
         }
 
         let n, ok = parse_int(val);
-        if ok && n > 0 {
-            return IndentKind.Spaces { n: n as! i32 };
-        }
+        if ok && n > 0 { return IndentKind.Spaces { n: n as! i32 }; }
         return IndentKind.Tabs;
     }
 }
@@ -88,16 +83,12 @@ fn parse_cli_args() -> Config {
             cfg.interactive = true;
         } else if arg_str == "--indent" {
             i++;
-            if i < raw.len {
-                cfg.indents.push(parse_indent_val(raw[i]));
-            }
+            if i < raw.len { cfg.indents.push(parse_indent_val(raw[i])); }
         } else if arg_str.len > 9 && arg_str[0..9] == "--indent=" {
             cfg.indents.push(parse_indent_val(arg_str[9..]));
         } else if arg_str.len > 0 && arg_str[0] == '-' && arg_str != "-" {
             // ignore unknown option or flag
-        } else {
-            cfg.files.push(arg_str);
-        }
+        } else { cfg.files.push(arg_str); }
         i++;
     }
     return cfg;

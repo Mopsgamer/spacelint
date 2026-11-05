@@ -22,15 +22,13 @@ fn get_extension(path: const u8[:]) -> u8[..16] {
     var out: u8[..16] = [];
     var i = path.len - 1;
     while i >= 0 && path[i] != '/' && path[i] != '\\' {
-        if path[i] == '.' {
-            let ext = path[i + 1..];
-            for b in ext {
-                let c = if b >= 'A' && b <= 'Z' { (b + 32) } else { b };
-                out.push(c);
-            }
-            return out;
+        if path[i] != '.' { i--; continue; }
+        let ext = path[i + 1..];
+        for b in ext {
+            let c = if b >= 'A' && b <= 'Z' { (b + 32) } else { b };
+            out.push(c);
         }
-        i--;
+        return out;
     }
     return out;
 }

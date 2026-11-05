@@ -10,11 +10,6 @@ struct Diagnostic {
     message: const u8[:]
 }
 
-// Checks if character is whitespace (space, tab, carriage return).
-fn is_ws(c: u8) -> bool {
-    return c == ' ' || c == '\t' || c == '\r';
-}
-
 // Returns the trailing whitespace length (including carriage return).
 fn get_trailing_ws_len(line: const u8[:]) -> i32 {
     if line.len == 0 { return 0; }
@@ -44,28 +39,27 @@ fn autodetect_spaces(text: const u8[:]) -> bool, i32 {
             i++;
             continue;
         }
-        if at_bol {
-            if c == ' ' {
-                space_indent_count++;
-                // count consecutive spaces
-                var sp_count = 0;
-                while i < text.len && text[i] == ' ' {
-                    sp_count++;
-                    i++;
-                }
-                if sp_count == 2 || sp_count == 6 {
-                    spaces_2++;
-                } else if sp_count == 4 || sp_count == 8 {
-                    spaces_4++;
-                }
-                at_bol = false;
-                continue;
-            } else if c == '\t' {
-                tab_indent_count++;
-                at_bol = false;
-            } else if c != '\r' {
-                at_bol = false;
+        if !at_bol { i++; continue; }
+        if c == ' ' {
+            space_indent_count++;
+            // count consecutive spaces
+            var sp_count = 0;
+            while i < text.len && text[i] == ' ' {
+                sp_count++;
+                i++;
             }
+            if sp_count == 2 || sp_count == 6 {
+                spaces_2++;
+            } else if sp_count == 4 || sp_count == 8 {
+                spaces_4++;
+            }
+            at_bol = false;
+            continue;
+        } else if c == '\t' {
+            tab_indent_count++;
+            at_bol = false;
+        } else if c != '\r' {
+            at_bol = false;
         }
         i++;
     }
