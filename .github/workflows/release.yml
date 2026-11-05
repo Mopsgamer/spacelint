@@ -257,6 +257,76 @@ jobs:
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "Releasing tag: ${TAG}"
 
+      - name: Update CHANGELOG.md for Release
+        env:
+          RELEASE_TAG: ${{ steps.release_tag.outputs.tag }}
+        run: |
+          python3 - << 'EOF'
+          import os
+          import re
+          import sys
+          from datetime import datetime, timezone
+
+          tag = os.environ.get("RELEASE_TAG", "").strip()
+          if not tag:
+              print("No release tag provided")
+              sys.exit(0)
+
+          version = tag.lstrip("v")
+          today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          filepath = "CHANGELOG.md"
+
+          try:
+              with open(filepath, "r", encoding="utf-8") as f:
+                  content = f.read()
+          except FileNotFoundError:
+              print(f"{filepath} not found")
+              sys.exit(0)
+
+          if re.search(rf'(?m)^##\s*\[{re.escape(version)}\]', content):
+              print(f"Version {version} already present in {filepath}")
+              sys.exit(0)
+
+          match = re.search(r'(?m)^##\s*\[Unreleased\]', content, flags=re.IGNORECASE)
+          if not match:
+              print("No [Unreleased] section found")
+              sys.exit(0)
+
+          unreleased_start = match.start()
+          unreleased_end = match.end()
+
+          rest_text = content[unreleased_end:]
+          next_match = re.search(r'(?m)^##\s*\[', rest_text)
+          if next_match:
+              unreleased_body = rest_text[:next_match.start()].strip()
+              rest = rest_text[next_match.start():]
+          else:
+              unreleased_body = rest_text.strip()
+              rest = ""
+
+          if not unreleased_body:
+              print("No changes under [Unreleased] to move")
+              sys.exit(0)
+
+          new_section = f"## [Unreleased]\n\n## [{version}] - {today}\n\n{unreleased_body}\n"
+          new_content = content[:unreleased_start] + new_section + (f"\n{rest}" if rest else "")
+
+          with open(filepath, "w", encoding="utf-8") as f:
+              f.write(new_content)
+
+          print(f"Successfully updated {filepath} for version {version} with date {today}")
+          EOF
+
+          if ! git diff --quiet CHANGELOG.md; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add CHANGELOG.md
+            git commit -m "docs: release ${{ steps.release_tag.outputs.tag }} [skip ci]"
+            DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+            TARGET_BRANCH="${DEFAULT_BRANCH:-main}"
+            git push origin "HEAD:${TARGET_BRANCH}"
+          fi
+
       - name: Sign Bare Binaries with GitHub Artifact Attestations
         uses: actions/attest-build-provenance@v2
         with:
