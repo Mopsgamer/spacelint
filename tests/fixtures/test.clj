@@ -1,2 +1,2 @@
-(ns hello.core)
+(ns hello.core)   
 (println "Hello Clojure!")

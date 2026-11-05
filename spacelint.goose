@@ -23,6 +23,7 @@ fn process_buffer(
     // Determine target indentation for this file
     var target_indent_spaces = false;
     var indent_step: i32 = 4;
+    var indent_disabled = false;
 
     // First check for extension-specific matches
     var matched_rule = false;
@@ -32,6 +33,7 @@ fn process_buffer(
                 if file_ext == se.ext {
                     target_indent_spaces = true;
                     indent_step = se.n;
+                    indent_disabled = false;
                     matched_rule = true;
                     break;
                 }
@@ -40,6 +42,7 @@ fn process_buffer(
                 if file_ext == te.ext {
                     target_indent_spaces = false;
                     indent_step = 4;
+                    indent_disabled = false;
                     matched_rule = true;
                     break;
                 }
@@ -49,13 +52,22 @@ fn process_buffer(
                     let sp, st = autodetect_spaces(text);
                     target_indent_spaces = sp;
                     indent_step = st;
+                    indent_disabled = false;
+                    matched_rule = true;
+                    break;
+                }
+            },
+            OffExt oe => {
+                if file_ext == oe.ext {
+                    indent_disabled = true;
                     matched_rule = true;
                     break;
                 }
             },
             Tabs => {},
             Spaces _ => {},
-            Auto => {}
+            Auto => {},
+            Off => {}
         }
     }
 
@@ -66,19 +78,26 @@ fn process_buffer(
                 Tabs => {
                     target_indent_spaces = false;
                     indent_step = 4;
+                    indent_disabled = false;
                 },
                 Spaces s => {
                     target_indent_spaces = true;
                     indent_step = s.n;
+                    indent_disabled = false;
                 },
                 Auto => {
                     let sp, st = autodetect_spaces(text);
                     target_indent_spaces = sp;
                     indent_step = st;
+                    indent_disabled = false;
+                },
+                Off => {
+                    indent_disabled = true;
                 },
                 SpacesExt _ => {},
                 TabsExt _ => {},
-                AutoExt _ => {}
+                AutoExt _ => {},
+                OffExt _ => {}
             }
         }
     }
@@ -374,7 +393,7 @@ fn process_buffer(
         }
 
         // Check indentation mismatch if not inside multiline string and not an empty line
-        if !line_is_in_multiline_str && !is_empty_line {
+        if !indent_disabled && !line_is_in_multiline_str && !is_empty_line {
             if is_mixed && !is_jsdoc_star_line {
                 let d = Diagnostic {
                     line: line_num,
@@ -421,26 +440,30 @@ fn process_buffer(
                 }
             } else {
                 let rest_of_line = trimmed_line[lead_idx..];
-                // Indentation conversion
-                if is_jsdoc_star_line {
-                    if !target_indent_spaces {
-                        for t in leading_tabs { out_fixed.push('\t'); }
-                        out_fixed.push(' ');
-                        out_fixed.append(rest_of_line);
-                    } else {
+                if indent_disabled {
+                    out_fixed.append(trimmed_line);
+                } else {
+                    // Indentation conversion
+                    if is_jsdoc_star_line {
+                        if !target_indent_spaces {
+                            for t in leading_tabs { out_fixed.push('\t'); }
+                            out_fixed.push(' ');
+                            out_fixed.append(rest_of_line);
+                        } else {
+                            let total_spaces = leading_tabs * indent_step + leading_spaces;
+                            for s in total_spaces { out_fixed.push(' '); }
+                            out_fixed.append(rest_of_line);
+                        }
+                    } else if target_indent_spaces {
                         let total_spaces = leading_tabs * indent_step + leading_spaces;
                         for s in total_spaces { out_fixed.push(' '); }
                         out_fixed.append(rest_of_line);
+                    } else {
+                        let tabs_from_spaces = (leading_spaces + indent_step - 1) / indent_step;
+                        let total_tabs = leading_tabs + tabs_from_spaces;
+                        for t in total_tabs { out_fixed.push('\t'); }
+                        out_fixed.append(rest_of_line);
                     }
-                } else if target_indent_spaces {
-                    let total_spaces = leading_tabs * indent_step + leading_spaces;
-                    for s in total_spaces { out_fixed.push(' '); }
-                    out_fixed.append(rest_of_line);
-                } else {
-                    let tabs_from_spaces = (leading_spaces + indent_step - 1) / indent_step;
-                    let total_tabs = leading_tabs + tabs_from_spaces;
-                    for t in total_tabs { out_fixed.push('\t'); }
-                    out_fixed.append(rest_of_line);
                 }
 
                 if raw_line.len != (out_fixed.len - line_start) {
@@ -553,12 +576,15 @@ fn print_help() {
         "\x1b[1m\x1b[36mOptions:\x1b[0m\n",
         "  \x1b[1m-h, --help\x1b[0m               Print help information\n",
         "  \x1b[1m-v, -V, --version\x1b[0m        Print version information\n",
+        "      \x1b[1m--rules\x1b[0m              List all the rules that are currently registered\n",
         "      \x1b[1m--fix\x1b[0m                Automatically fix whitespace issues\n",
         "  \x1b[1m-i, --interactive\x1b[0m        Prompt to apply fix for each issue\n",
         "      \x1b[1m--indent\x1b[0m <MODE>      Set indentation mode (can be specified multiple times):\n",
         "                             \x1b[32mtabs\x1b[0m            Require tabs (default)\n",
         "                             \x1b[32m<N>\x1b[0m             Require N spaces (e.g. 2, 4)\n",
         "                             \x1b[32mauto\x1b[0m            Autodetect per file\n",
+        "                             \x1b[32moff\x1b[0m             Disable indentation check\n",
+        "                             \x1b[32moff.<EXT>\x1b[0m       Disable indentation check for extension\n",
         "                             \x1b[32mauto.<EXT>\x1b[0m      Autodetect for extension (e.g. auto.yml)\n",
         "                             \x1b[32m<N>.<EXT>\x1b[0m       Require N spaces for extension (e.g. 2.json)\n",
         "                             \x1b[32mtabs.<EXT>\x1b[0m      Require tabs for extension (e.g. tabs.go)\n\n",
@@ -591,6 +617,11 @@ fn main() {
 
     if cfg.version {
         print_version();
+        return;
+    }
+
+    if cfg.rules {
+        print_rules();
         return;
     }
 

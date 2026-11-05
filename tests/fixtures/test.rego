@@ -1,3 +1,3 @@
-package example
+package example   
 
 default allow = false

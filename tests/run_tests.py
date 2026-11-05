@@ -191,6 +191,50 @@ def test_in_place_fix():
 
     print("  In-place --fix tests passed!")
 
+def test_rules():
+    print("Testing --rules flag...")
+    code, out, _ = run_cmd([SPACELINT_BIN, "--rules"])
+    assert code == 0, f"--rules failed: code={code}"
+    assert "## Correctness" in out, "--rules output missing Correctness section"
+    assert "no-trailing-spaces" in out, "--rules output missing no-trailing-spaces"
+    assert "no-carriage-return" in out, "--rules output missing no-carriage-return"
+    assert "no-mixed-spaces-and-tabs" in out, "--rules output missing no-mixed-spaces-and-tabs"
+    assert "## Style" in out, "--rules output missing Style section"
+    assert "indent" in out, "--rules output missing indent"
+    assert "Total: 4" in out, "--rules output missing total"
+    print("  --rules tests passed!")
+
+def test_indent_off():
+    print("Testing --indent off and --indent off.<ext>...")
+    # indent off ignores spaces when tabs expected
+    code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "off", "-"], input_data="    let x = 1;\n")
+    assert code == 0
+    assert "indent" not in out and "no-mixed-spaces-and-tabs" not in out
+
+    # indent off ignores mixed tabs and spaces
+    code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "off", "-"], input_data=" \tlet x = 1;\n")
+    assert code == 0
+    assert "no-mixed-spaces-and-tabs" not in out
+
+    # indent off with --fix leaves indentation intact
+    code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "off", "--fix", "-"], input_data="  let x = 1;   \n")
+    assert code == 0
+    assert out == "  let x = 1;\n"
+
+    # indent off.<ext>
+    with tempfile.NamedTemporaryFile("w+", suffix=".py", delete=False, newline="") as tf:
+        tf.write("    let x = 1;\n")
+        tf_name = tf.name
+        tf.close()
+    try:
+        code, out, _ = run_cmd([SPACELINT_BIN, "--indent", "off.py", tf_name])
+        assert code == 0
+        assert "Finished" in out and "Found" not in out
+    finally:
+        os.remove(tf_name)
+
+    print("  --indent off tests passed!")
+
 def main():
     test_cli_flags()
     test_language_fixtures()
@@ -198,6 +242,8 @@ def main():
     test_piping_and_fix()
     test_indent_options()
     test_in_place_fix()
+    test_rules()
+    test_indent_off()
     print("\nALL SPACELINT TESTS PASSED SUCCESSFULLY!")
 
 if __name__ == "__main__":

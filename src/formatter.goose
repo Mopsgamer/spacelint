@@ -12,6 +12,27 @@ const ANSI_GREEN: const u8[:] = "\x1b[32m";
 const ANSI_CYAN: const u8[:] = "\x1b[36m";
 const ANSI_BLUE: const u8[:] = "\x1b[34m";
 
+fn print_rules() {
+    var out: u8[>..] = [];
+    format(out,
+        "## Correctness (3)\n",
+        "Code that is outright wrong or useless.\n",
+        "| Rule name                    | Source     | Default | Enabled? | Fixable? |\n",
+        "| ---------------------------- | ---------- | ------- | -------- | -------- |\n",
+        "| no-carriage-return           | eslint     | ✅      | ✅       | 🛠️        |\n",
+        "| no-mixed-spaces-and-tabs     | eslint     | ✅      | ✅       | 🛠️        |\n",
+        "| no-trailing-spaces           | eslint     | ✅      | ✅       | 🛠️        |\n\n",
+        "## Style (1)\n",
+        "Code that should be written in a more idiomatic way.\n",
+        "| Rule name                    | Source     | Default | Enabled? | Fixable? |\n",
+        "| ---------------------------- | ---------- | ------- | -------- | -------- |\n",
+        "| indent                       | eslint     | ✅      | ✅       | 🛠️        |\n\n",
+        "Default: 4\n",
+        "Total: 4\n"
+    );
+    write_stdout(out);
+}
+
 fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, end_col: i32, rule: const u8[:], msg: const u8[:], line_content: const u8[:]) {
     var num_len = 0;
     var n = line_num;

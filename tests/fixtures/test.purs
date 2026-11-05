@@ -1,3 +1,3 @@
-module Main where
+module Main where   
 import Effect.Console (log)
 main = log "Hello PureScript!"

@@ -1,4 +1,4 @@
-import std;
+import std;   
 
 fn main() {
 	print("Hello Goose!");

@@ -1,2 +1,2 @@
-#set page(paper: "a4")
+#set page(paper: "a4")   
 = Hello Typst!

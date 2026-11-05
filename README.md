@@ -19,6 +19,8 @@ A fast, language-aware whitespace linter and fixer CLI written in the [Goose pro
   - `--indent tabs` (default)
   - `--indent <N>` (e.g. `--indent 2`, `--indent 4`)
   - `--indent auto` (autodetects tabs vs spaces per file)
+  - `--indent off` (disables indentation checking and fixing)
+  - `--indent off.<ext>` (disables indentation checking for `<ext>`)
   - `--indent auto.<ext>` (autodetects for files with `<ext>`, tabs for all others)
 
 ## Installation

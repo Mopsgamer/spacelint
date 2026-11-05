@@ -1,2 +1,2 @@
-def my_rule():
+def my_rule():   
     print("Hello Starlark!")

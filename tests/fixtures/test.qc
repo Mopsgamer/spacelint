@@ -1,4 +1,4 @@
-void() main =
+void() main =   
 {
     bprint("Hello Quake!\n");
 };

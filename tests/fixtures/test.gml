@@ -1,1 +1,1 @@
-show_debug_message("Hello GML!");
+show_debug_message("Hello GML!");   

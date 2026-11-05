@@ -1,3 +1,3 @@
-function hello()
+function hello()   
 	print("Hello Lua!")
 end

@@ -1,4 +1,4 @@
-entity hello is
+entity hello is   
 end hello;
 
 architecture sim of hello is

@@ -1,2 +1,2 @@
-FROM alpine:latest
+FROM alpine:latest   
 RUN echo "Hello Dockerfile!"

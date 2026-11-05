@@ -1,3 +1,3 @@
-BEGIN {
+BEGIN {   
     print "Hello Awk!"
 }

@@ -1,2 +1,2 @@
-fn main():
+fn main():   
     print("Hello Mojo!")

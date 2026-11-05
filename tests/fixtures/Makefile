@@ -1,2 +1,2 @@
-all:
+all:   
 	@echo "Hello Makefile!"

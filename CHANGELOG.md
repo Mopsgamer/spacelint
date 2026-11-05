@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Oxlint-compatible `--rules` command-line option to list registered whitespace rules with categories, defaults, and fixability statuses in Markdown table format.
+- Support for disabling indentation checks and fixes via `--indent off` and extension-specific `--indent off.<ext>`.
 - First-class language support for Markdown, MDX, Goose, Vlang, D, Lua, Assembly, AssemblyScript, Kotlin, Java, Dart, Odin, Python, Go, Ruby, Shell, PHP, Swift, C#, Scala, CSS variants (PostCSS, SugarSS, Stylus), SQL, R, Julia, Perl, Elixir, Erlang, Haskell, Elm, PureScript, GraphQL, Dockerfile, Makefile, Nix, Terraform, Vue, Svelte, Astro, Fortran, Ada, Pascal, OCaml, Clojure, F#, Groovy, PowerShell, Solidity, Nim, Crystal, CMake, Protobuf, Shaders (GLSL, WGSL, HLSL, Metal, Cg, Godot Shaders), GameDev (GML, Wren, Squirrel, UnrealScript, QuakeC, Papyrus), GoTemplate, CSV, and TSV.
 - Tailored comment and multiline string lexing rules across 90+ programming, markup, shader, and game development languages.
 - Comprehensive test fixtures and automated regression tests across all supported file formats.

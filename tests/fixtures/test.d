@@ -1,4 +1,4 @@
-import std.stdio;
+import std.stdio;   
 
 void main() {
 	writeln("Hello D!");

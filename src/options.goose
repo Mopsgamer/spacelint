@@ -8,12 +8,15 @@ enum IndentKind {
     Auto,
     AutoExt { ext: u8[..16] },
     SpacesExt { n: i32, ext: u8[..16] },
-    TabsExt { ext: u8[..16] }
+    TabsExt { ext: u8[..16] },
+    Off,
+    OffExt { ext: u8[..16] }
 }
 
 struct Config {
     help: bool,
     version: bool,
+    rules: bool,
     fix: bool,
     interactive: bool,
     indents: IndentKind[..32],
@@ -25,6 +28,8 @@ fn parse_indent_val(val: const u8[:]) -> IndentKind {
         return IndentKind.Tabs;
     } else if val == "auto" {
         return IndentKind.Auto;
+    } else if val == "off" {
+        return IndentKind.Off;
     } else if val.len > 5 && val[0..5] == "auto." {
         var ext_buf: u8[..16] = [];
         for b in val[5..] { ext_buf.push(b); }
@@ -33,6 +38,10 @@ fn parse_indent_val(val: const u8[:]) -> IndentKind {
         var ext_buf: u8[..16] = [];
         for b in val[5..] { ext_buf.push(b); }
         return IndentKind.TabsExt { ext: ext_buf };
+    } else if val.len > 4 && val[0..4] == "off." {
+        var ext_buf: u8[..16] = [];
+        for b in val[4..] { ext_buf.push(b); }
+        return IndentKind.OffExt { ext: ext_buf };
     } else {
         // Check for <N>.<ext>
         var dot_idx = -1;
@@ -64,6 +73,7 @@ fn parse_cli_args() -> Config {
     var cfg = Config {
         help: false,
         version: false,
+        rules: false,
         fix: false,
         interactive: false,
         indents: [],
@@ -77,6 +87,8 @@ fn parse_cli_args() -> Config {
             cfg.help = true;
         } else if arg_str == "-v" || arg_str == "-V" || arg_str == "--version" {
             cfg.version = true;
+        } else if arg_str == "--rules" {
+            cfg.rules = true;
         } else if arg_str == "--fix" {
             cfg.fix = true;
         } else if arg_str == "-i" || arg_str == "--interactive" {

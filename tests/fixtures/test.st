@@ -1,1 +1,1 @@
-Transcript show: 'Hello Smalltalk!'; cr.
+Transcript show: 'Hello Smalltalk!'; cr.   

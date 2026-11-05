@@ -1,3 +1,3 @@
-package hello
+package hello   
 
 message: "Hello CUE!"
