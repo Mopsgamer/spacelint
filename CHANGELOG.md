@@ -12,5 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for `-f` and `--format` output option with `agent`, `stylish`, and `default` modes.
 - Command-line `--rules` option to list registered whitespace rules with categories, defaults, and fixability statuses in Markdown table format.
 - Support for rule configuration options via `-C`, `-W`/`--warn`, `-A`/`--allow`, `-D`/`--deny`, and `-c`/`--config`.
+- Support for `.spacelintrc.json`: rules and overrides.
 - Comprehensive test fixtures and automated regression tests across all supported file formats.
 
