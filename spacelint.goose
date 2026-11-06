@@ -19,14 +19,16 @@ fn process_buffer(
     let language = detect_lang(file_path);
     let file_ext = get_extension(file_path);
 
+    let active_rules = get_rules_for_file(cfg.rules_cfg, file_path);
+
     // Determine target indentation for this file
     var target_indent_spaces = false;
     var indent_step: i32 = 4;
-    var indent_disabled = (cfg.rules_cfg.indent_sev == RuleSeverity.Off);
+    var indent_disabled = (active_rules.indent_sev == RuleSeverity.Off);
 
     // First check for extension-specific matches
     var matched_rule = false;
-    for rule in cfg.rules_cfg.indent_exts {
+    for rule in active_rules.indent_exts {
         if file_ext == rule.ext {
             match rule.kind {
                 Tabs => {
@@ -62,7 +64,7 @@ fn process_buffer(
 
     // If no extension-specific match, check for global defaults
     if !matched_rule {
-        match cfg.rules_cfg.indent_global {
+        match active_rules.indent_global {
             Tabs => {
                 target_indent_spaces = false;
                 indent_step = 4;
@@ -82,7 +84,7 @@ fn process_buffer(
         }
     }
 
-    if cfg.rules_cfg.indent_sev == RuleSeverity.Off {
+    if active_rules.indent_sev == RuleSeverity.Off {
         indent_disabled = true;
     }
 
@@ -341,7 +343,7 @@ fn process_buffer(
         if !line_is_in_multiline_str {
             if trailing_len > 0 {
                 let is_cr_only = has_cr && content_len == raw_line.len - 1 && raw_line[raw_line.len - 1] == '\r';
-                let rule_sev = if is_cr_only { cfg.rules_cfg.carriage_return_sev } else { cfg.rules_cfg.trailing_spaces_sev };
+                let rule_sev = if is_cr_only { active_rules.carriage_return_sev } else { active_rules.trailing_spaces_sev };
 
                 if rule_sev != RuleSeverity.Off {
                     let d = Diagnostic {
@@ -383,17 +385,17 @@ fn process_buffer(
 
         // Check indentation mismatch if not inside multiline string and not an empty line
         if !line_is_in_multiline_str && !is_empty_line {
-            if is_mixed && !is_jsdoc_star_line && cfg.rules_cfg.mixed_spaces_tabs_sev != RuleSeverity.Off {
+            if is_mixed && !is_jsdoc_star_line && active_rules.mixed_spaces_tabs_sev != RuleSeverity.Off {
                 let d = Diagnostic {
                     line: line_num,
                     col: 1,
                     end_col: (lead_idx + 1) as! i32,
                     rule: "no-mixed-spaces-and-tabs",
                     message: "Mixed spaces and tabs found in indentation",
-                    severity: cfg.rules_cfg.mixed_spaces_tabs_sev
+                    severity: active_rules.mixed_spaces_tabs_sev
                 };
                 out_diags.push(d);
-            } else if !indent_disabled && cfg.rules_cfg.indent_sev != RuleSeverity.Off {
+            } else if !indent_disabled && active_rules.indent_sev != RuleSeverity.Off {
                 if target_indent_spaces && leading_tabs > 0 {
                     let d = Diagnostic {
                         line: line_num,
@@ -401,7 +403,7 @@ fn process_buffer(
                         end_col: (lead_idx + 1) as! i32,
                         rule: "indent",
                         message: "Expected space indentation but found tabs",
-                        severity: cfg.rules_cfg.indent_sev
+                        severity: active_rules.indent_sev
                     };
                     out_diags.push(d);
                 } else if !target_indent_spaces && leading_spaces > 0 && !is_jsdoc_star_line {
@@ -411,7 +413,7 @@ fn process_buffer(
                         end_col: (lead_idx + 1) as! i32,
                         rule: "indent",
                         message: "Expected tab indentation but found spaces",
-                        severity: cfg.rules_cfg.indent_sev
+                        severity: active_rules.indent_sev
                     };
                     out_diags.push(d);
                 }
@@ -426,7 +428,7 @@ fn process_buffer(
                 }
             } else if line_is_in_multiline_str {
                 // Preserve multiline strings verbatim, only strip \r at end if carriage-return rule not off
-                if has_cr && raw_line[raw_line.len - 1] == '\r' && cfg.rules_cfg.carriage_return_sev != RuleSeverity.Off {
+                if has_cr && raw_line[raw_line.len - 1] == '\r' && active_rules.carriage_return_sev != RuleSeverity.Off {
                     out_fixed.append(raw_line[0..raw_line.len - 1]);
                     was_modified = true;
                 } else {
@@ -434,7 +436,7 @@ fn process_buffer(
                 }
             } else {
                 let rest_of_line = trimmed_line[lead_idx..];
-                if indent_disabled || cfg.rules_cfg.indent_sev == RuleSeverity.Off {
+                if indent_disabled || active_rules.indent_sev == RuleSeverity.Off {
                     out_fixed.append(trimmed_line);
                 } else {
                     // Indentation conversion

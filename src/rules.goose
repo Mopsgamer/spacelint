@@ -1,6 +1,7 @@
 // Core whitespace checking and fixing rules for spacelint.
 import std;
 import os;
+import src.glob;
 
 enum RuleSeverity {
     Off,
@@ -20,13 +21,28 @@ struct IndentExtOverride {
     kind: IndentRuleKind
 }
 
+struct RuleOverride {
+    has_trailing_spaces: bool,
+    trailing_spaces_sev: RuleSeverity,
+    has_carriage_return: bool,
+    carriage_return_sev: RuleSeverity,
+    has_mixed_spaces_tabs: bool,
+    mixed_spaces_tabs_sev: RuleSeverity,
+    has_indent: bool,
+    indent_sev: RuleSeverity,
+    has_indent_kind: bool,
+    indent_kind: IndentRuleKind,
+    globs: ParsedGlob[..16]
+}
+
 struct RulesConfig {
     trailing_spaces_sev: RuleSeverity,
     carriage_return_sev: RuleSeverity,
     mixed_spaces_tabs_sev: RuleSeverity,
     indent_sev: RuleSeverity,
     indent_global: IndentRuleKind,
-    indent_exts: IndentExtOverride[..64]
+    indent_exts: IndentExtOverride[..64],
+    overrides: RuleOverride[..32]
 }
 
 struct Diagnostic {
@@ -45,7 +61,24 @@ fn default_rules_config() -> RulesConfig {
         mixed_spaces_tabs_sev: RuleSeverity.Warn,
         indent_sev: RuleSeverity.Warn,
         indent_global: IndentRuleKind.Tabs,
-        indent_exts: []
+        indent_exts: [],
+        overrides: []
+    };
+}
+
+fn default_rule_override() -> RuleOverride {
+    return RuleOverride {
+        has_trailing_spaces: false,
+        trailing_spaces_sev: RuleSeverity.Warn,
+        has_carriage_return: false,
+        carriage_return_sev: RuleSeverity.Warn,
+        has_mixed_spaces_tabs: false,
+        mixed_spaces_tabs_sev: RuleSeverity.Warn,
+        has_indent: false,
+        indent_sev: RuleSeverity.Warn,
+        has_indent_kind: false,
+        indent_kind: IndentRuleKind.Tabs,
+        globs: []
     };
 }
 
@@ -119,6 +152,47 @@ fn get_trailing_ws_len(line: const u8[:]) -> i32 {
         i--;
     }
     return trailing_count as! i32;
+}
+
+
+fn get_rules_for_file(base_cfg: RulesConfig, file_path: const u8[:]) -> RulesConfig {
+    if base_cfg.overrides.len == 0 {
+        return base_cfg;
+    }
+
+    var norm_f: u8[>..] = [];
+    normalize_path_for_match(file_path, norm_f);
+
+    var effective_cfg = base_cfg;
+    for ov in base_cfg.overrides {
+        var is_match = false;
+        for g in ov.globs {
+            if match_parsed_glob(g, norm_f) {
+                is_match = true;
+                break;
+            }
+        }
+
+        if is_match {
+            if ov.has_trailing_spaces {
+                effective_cfg.trailing_spaces_sev = ov.trailing_spaces_sev;
+            }
+            if ov.has_carriage_return {
+                effective_cfg.carriage_return_sev = ov.carriage_return_sev;
+            }
+            if ov.has_mixed_spaces_tabs {
+                effective_cfg.mixed_spaces_tabs_sev = ov.mixed_spaces_tabs_sev;
+            }
+            if ov.has_indent {
+                effective_cfg.indent_sev = ov.indent_sev;
+            }
+            if ov.has_indent_kind {
+                effective_cfg.indent_global = ov.indent_kind;
+            }
+        }
+    }
+
+    return effective_cfg;
 }
 
 // Autodetects if spaces or tabs predominate for indentation across the text.

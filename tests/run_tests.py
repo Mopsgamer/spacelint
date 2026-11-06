@@ -322,6 +322,135 @@ def test_rule_options_and_categories():
 
     print("  Rule options, categories, and JSON syntax tests passed!")
 
+def test_config_overrides():
+    print("Testing config overrides for different extensions and folders...")
+    with tempfile.TemporaryDirectory() as td:
+        # Create directory structure:
+        #   src/app.ts (spaces indent, trailing spaces)
+        #   src/legacy.js (tab indent)
+        #   scripts/build.js (trailing spaces allowed in scripts)
+        #   tests/app.test.ts (mixed spaces & tabs, denied in test)
+        #   docs/guide.md (trailing spaces allowed)
+        src_dir = os.path.join(td, "src")
+        scripts_dir = os.path.join(td, "scripts")
+        tests_dir = os.path.join(td, "tests")
+        docs_dir = os.path.join(td, "docs")
+        os.makedirs(src_dir, exist_ok=True)
+        os.makedirs(scripts_dir, exist_ok=True)
+        os.makedirs(tests_dir, exist_ok=True)
+        os.makedirs(docs_dir, exist_ok=True)
+
+        app_ts = os.path.join(src_dir, "app.ts")
+        legacy_js = os.path.join(src_dir, "legacy.js")
+        build_js = os.path.join(scripts_dir, "build.js")
+        test_ts = os.path.join(tests_dir, "app.test.ts")
+        guide_md = os.path.join(docs_dir, "guide.md")
+
+        # app.ts: space indented (2 spaces), trailing spaces
+        with open(app_ts, "w") as f:
+            f.write("  const a = 1; \n")
+
+        # legacy.js: tab indented, no trailing spaces
+        with open(legacy_js, "w") as f:
+            f.write("\tconst b = 2;\n")
+
+        # build.js: trailing spaces
+        with open(build_js, "w") as f:
+            f.write("const c = 3;  \n")
+
+        # test.ts: mixed spaces and tabs
+        with open(test_ts, "w") as f:
+            f.write(" \tconst d = 4;\n")
+
+        # guide.md: trailing spaces
+        with open(guide_md, "w") as f:
+            f.write("# Heading   \n")
+
+        config = {
+            "categories": {
+                "correctness": "warn"
+            },
+            "rules": {
+                "indent": ["warn", "tabs"]
+            },
+            "overrides": [
+                {
+                    "files": ["*.ts", "**/*.ts"],
+                    "rules": {
+                        "indent": ["error", 2]
+                    }
+                },
+                {
+                    "files": ["scripts/*"],
+                    "rules": {
+                        "no-trailing-spaces": "off"
+                    }
+                },
+                {
+                    "files": ["tests/**"],
+                    "rules": {
+                        "no-mixed-spaces-and-tabs": "error"
+                    }
+                },
+                {
+                    "files": ["docs/*.md"],
+                    "categories": {
+                        "correctness": "off"
+                    }
+                }
+            ]
+        }
+        config_path = os.path.join(td, ".spacelintrc.json")
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+        # 1. Test app.ts:
+        # *.ts override expects 2 spaces indentation (so 2 spaces is OK, not an indent warning)
+        # trailing spaces should be reported
+        code, out, _ = run_cmd([SPACELINT_BIN, "-c", config_path, app_ts])
+        assert code == 0
+        assert "no-trailing-spaces" in out
+        assert "indent" not in out, f"app.ts should match 2 space indent override, got:\n{out}"
+
+        # 2. Test legacy.js:
+        # Base config expects tabs, so tab indented file should have no warnings
+        code, out, _ = run_cmd([SPACELINT_BIN, "-c", config_path, legacy_js])
+        assert code == 0
+        assert "Finished" in out and "Found" not in out, f"legacy.js should have 0 warnings, got:\n{out}"
+
+        # 3. Test scripts/build.js:
+        # scripts/* overrides no-trailing-spaces to "off"
+        code, out, _ = run_cmd([SPACELINT_BIN, "-c", config_path, build_js])
+        assert code == 0
+        assert "Finished" in out and "Found" not in out, f"scripts/build.js should have no-trailing-spaces turned off, got:\n{out}"
+
+        # 4. Test tests/app.test.ts:
+        # tests/** overrides no-mixed-spaces-and-tabs to "error" -> exit code 1
+        code, out, _ = run_cmd([SPACELINT_BIN, "-c", config_path, test_ts])
+        assert code == 1, f"tests/app.test.ts should fail with error exit code 1, got code={code}, out={out}"
+        assert "no-mixed-spaces-and-tabs" in out
+        assert "error" in out
+
+        # 5. Test docs/guide.md:
+        # docs/*.md overrides correctness category to "off"
+        code, out, _ = run_cmd([SPACELINT_BIN, "-c", config_path, guide_md])
+        assert code == 0
+        assert "Finished" in out and "Found" not in out, f"docs/guide.md should have correctness turned off, got:\n{out}"
+
+        # 6. Test CLI flags interaction with config overrides (-D, -A, -W, -C)
+        # If CLI specifies -D no-trailing-spaces, CLI takes precedence
+        code, out, _ = run_cmd([SPACELINT_BIN, "-c", config_path, "-D", "no-trailing-spaces", app_ts])
+        assert code == 1, "CLI -D should elevate warning to error"
+        assert "error" in out
+        assert "no-trailing-spaces" in out
+
+        # If CLI specifies -A no-trailing-spaces, it turns off the warning
+        code, out, _ = run_cmd([SPACELINT_BIN, "-c", config_path, "-A", "no-trailing-spaces", app_ts])
+        assert code == 0
+        assert "Finished" in out and "Found" not in out
+
+    print("  Config overrides tests passed!")
+
 def test_format_options():
     print("Testing format options (-f agent, -f stylish, -f default, --format)...")
     sample_file = os.path.join(FIXTURES_DIR, "test.js")
@@ -408,6 +537,7 @@ def main():
     test_in_place_fix()
     test_rules()
     test_rule_options_and_categories()
+    test_config_overrides()
     test_format_options()
     print("\nALL SPACELINT TESTS PASSED SUCCESSFULLY!")
 

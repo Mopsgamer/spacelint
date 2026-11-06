@@ -2,6 +2,7 @@
 import std;
 import os;
 import json;
+import src.glob;
 import src.rules;
 
 enum FormatOption {
@@ -88,6 +89,116 @@ fn handle_indent_rule_option(rc: RulesConfig&, sev: RuleSeverity, option_node: j
         },
         _ => {}
     }
+}
+
+fn set_override_rule_severity(ov: RuleOverride&, raw_name: const u8[:], sev: RuleSeverity) {
+    let name = normalize_rule_name(raw_name);
+    if name == "no-trailing-spaces" {
+        ov.has_trailing_spaces = true;
+        ov.trailing_spaces_sev = sev;
+    } else if name == "no-carriage-return" {
+        ov.has_carriage_return = true;
+        ov.carriage_return_sev = sev;
+    } else if name == "no-mixed-spaces-and-tabs" {
+        ov.has_mixed_spaces_tabs = true;
+        ov.mixed_spaces_tabs_sev = sev;
+    } else if name == "indent" {
+        ov.has_indent = true;
+        ov.indent_sev = sev;
+    } else if name == "all" {
+        ov.has_trailing_spaces = true;
+        ov.trailing_spaces_sev = sev;
+        ov.has_carriage_return = true;
+        ov.carriage_return_sev = sev;
+        ov.has_mixed_spaces_tabs = true;
+        ov.mixed_spaces_tabs_sev = sev;
+        ov.has_indent = true;
+        ov.indent_sev = sev;
+    } else if name == "correctness" {
+        ov.has_trailing_spaces = true;
+        ov.trailing_spaces_sev = sev;
+        ov.has_carriage_return = true;
+        ov.carriage_return_sev = sev;
+        ov.has_mixed_spaces_tabs = true;
+        ov.mixed_spaces_tabs_sev = sev;
+    } else if name == "style" {
+        ov.has_indent = true;
+        ov.indent_sev = sev;
+    }
+}
+
+fn parse_rules_node_for_override(ov: RuleOverride&, rules_node: json::Node?) {
+    if !rules_node { return; }
+    json::each(rules_node) { child =>
+        let r_name = normalize_rule_name(child.key);
+        match child.val {
+            Str sv => {
+                let s, ok = parse_severity_str(sv.s);
+                if ok {
+                    set_override_rule_severity(ov, r_name, s);
+                } else if r_name == "indent" {
+                    ov.has_indent_kind = true;
+                    ov.indent_kind = parse_indent_value_str(sv.s);
+                }
+            },
+            Int iv => {
+                if r_name == "indent" && iv.v > 0 {
+                    ov.has_indent_kind = true;
+                    ov.indent_kind = IndentRuleKind.Spaces { n: iv.v as! i32 };
+                } else if iv.v == 0 {
+                    set_override_rule_severity(ov, r_name, RuleSeverity.Off);
+                } else if iv.v == 1 {
+                    set_override_rule_severity(ov, r_name, RuleSeverity.Warn);
+                } else if iv.v == 2 {
+                    set_override_rule_severity(ov, r_name, RuleSeverity.Error);
+                }
+            },
+            Arr _ => {
+                var first_elem = child.first;
+                if first_elem {
+                    var sev = RuleSeverity.Warn;
+                    match first_elem.val {
+                        Str sv => {
+                            let s, ok = parse_severity_str(sv.s);
+                            if ok { sev = s; }
+                        },
+                        Int iv => {
+                            if iv.v == 0 { sev = RuleSeverity.Off; }
+                            else if iv.v == 1 { sev = RuleSeverity.Warn; }
+                            else if iv.v == 2 { sev = RuleSeverity.Error; }
+                        },
+                        _ => {}
+                    }
+                    set_override_rule_severity(ov, r_name, sev);
+                    if r_name == "indent" {
+                        let opt_node = first_elem.next;
+                        if opt_node {
+                            match opt_node.val {
+                                Int iv => {
+                                    if iv.v > 0 {
+                                        ov.has_indent_kind = true;
+                                        ov.indent_kind = IndentRuleKind.Spaces { n: iv.v as! i32 };
+                                    }
+                                },
+                                Num nv => {
+                                    if nv.v > 0.0 {
+                                        ov.has_indent_kind = true;
+                                        ov.indent_kind = IndentRuleKind.Spaces { n: nv.v as! i32 };
+                                    }
+                                },
+                                Str sv => {
+                                    ov.has_indent_kind = true;
+                                    ov.indent_kind = parse_indent_value_str(sv.s);
+                                },
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            },
+            _ => {}
+        }
+    };
 }
 
 // Parses -C argument, which can be rule=severity or rule=JSON_VALUE
@@ -213,6 +324,69 @@ fn load_config_file(rc: RulesConfig&, path: const u8[:]) -> bool {
             }
             if has_sev {
                 set_category_severity(rc, child.key, sev);
+            }
+        };
+    }
+
+    // Look for "overrides"
+    let overrides_node = json::member(root, "overrides");
+    if overrides_node {
+        json::each(overrides_node) { item_node =>
+            var ov = default_rule_override();
+
+            // Parse "files" and pre-parse into inline stack structures
+            let files_node = json::member(item_node, "files");
+            if files_node {
+                match files_node.val {
+                    Str sv => {
+                        parse_pattern_into_globs(sv.s, ov.globs);
+                    },
+                    Arr _ => {
+                        json::each(files_node) { file_child =>
+                            match file_child.val {
+                                Str sv => {
+                                    parse_pattern_into_globs(sv.s, ov.globs);
+                                },
+                                _ => {}
+                            }
+                        };
+                    },
+                    _ => {}
+                }
+            }
+
+            // Parse categories if present in override
+            let cat_node = json::member(item_node, "categories");
+            if cat_node {
+                json::each(cat_node) { cat_child =>
+                    var sev = RuleSeverity.Warn;
+                    var has_sev = false;
+                    match cat_child.val {
+                        Str sv => {
+                            let s, ok = parse_severity_str(sv.s);
+                            if ok { sev = s; has_sev = true; }
+                        },
+                        Int iv => {
+                            if iv.v == 0 { sev = RuleSeverity.Off; has_sev = true; }
+                            else if iv.v == 1 { sev = RuleSeverity.Warn; has_sev = true; }
+                            else if iv.v == 2 { sev = RuleSeverity.Error; has_sev = true; }
+                        },
+                        _ => {}
+                    }
+                    if has_sev {
+                        set_override_rule_severity(ov, cat_child.key, sev);
+                    }
+                };
+            }
+
+            // Parse rules in override
+            let r_node = json::member(item_node, "rules");
+            if r_node {
+                parse_rules_node_for_override(ov, r_node);
+            }
+
+            if ov.globs.len > 0 {
+                rc.overrides.push(ov);
             }
         };
     }
