@@ -38,6 +38,7 @@ def test_cli_flags():
     assert code == 0, f"-h failed: code={code}"
     clean_out = strip_ansi(out)
     assert "Usage: spacelint" in clean_out, "-h output missing usage"
+    assert "--init" in clean_out, "-h output missing --init"
 
     # --version
     code, out, _ = run_cmd([SPACELINT_BIN, "--version"])
@@ -613,6 +614,74 @@ def test_limiters_max_warnings_and_problems():
 
     print("  Limiters --max-warnings and --max-problems tests passed!")
 
+def test_init_command_and_schema():
+    print("Testing --init command and configuration schema...")
+    # 1. Verify configuration_schema.json is valid JSON
+    schema_path = os.path.join(ROOT_DIR, "configuration_schema.json")
+    assert os.path.exists(schema_path), "configuration_schema.json should exist"
+    with open(schema_path, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    assert schema.get("$schema") == "http://json-schema.org/draft-07/schema#"
+    assert "categories" in schema.get("properties", {})
+    assert "rules" in schema.get("properties", {})
+    assert "overrides" in schema.get("properties", {})
+
+    # 2. Verify root .spacelintrc.json is valid JSON and accepted by spacelint
+    root_config = os.path.join(ROOT_DIR, ".spacelintrc.json")
+    assert os.path.exists(root_config), ".spacelintrc.json should exist in repo"
+    with open(root_config, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+    assert cfg.get("$schema") == "./configuration_schema.json"
+    assert "categories" in cfg
+    assert "rules" in cfg
+
+    # 3. Test running --init in a temporary directory
+    with tempfile.TemporaryDirectory() as td:
+        proc = subprocess.run(
+            [SPACELINT_BIN, "--init"],
+            cwd=td,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        assert proc.returncode == 0, f"--init failed: {proc.stderr}"
+        assert "Created .spacelintrc.json" in proc.stdout
+
+        init_cfg_path = os.path.join(td, ".spacelintrc.json")
+        assert os.path.exists(init_cfg_path), ".spacelintrc.json should be created"
+        with open(init_cfg_path, "r", encoding="utf-8") as f:
+            created_cfg = json.load(f)
+        assert created_cfg["$schema"] == "https://raw.githubusercontent.com/Mopsgamer/spacelint/main/configuration_schema.json"
+        assert created_cfg["categories"]["correctness"] == "warn"
+        assert created_cfg["rules"]["no-trailing-spaces"] == "warn"
+
+        # 4. Running --init again when .spacelintrc.json already exists
+        proc2 = subprocess.run(
+            [SPACELINT_BIN, "--init"],
+            cwd=td,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        assert proc2.returncode == 0
+        assert "already exists" in proc2.stdout
+
+        # 5. Linting using created .spacelintrc.json
+        test_file = os.path.join(td, "sample.js")
+        with open(test_file, "w") as f:
+            f.write("var x = 10;   \n")
+        proc3 = subprocess.run(
+            [SPACELINT_BIN, "-c", ".spacelintrc.json", "sample.js"],
+            cwd=td,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        assert proc3.returncode == 0
+        assert "no-trailing-spaces" in proc3.stdout
+
+    print("  --init command and configuration schema tests passed!")
+
 def main():
     test_cli_flags()
     test_language_fixtures()
@@ -626,6 +695,7 @@ def main():
     test_format_options()
     test_files_and_timings_commands()
     test_limiters_max_warnings_and_problems()
+    test_init_command_and_schema()
     print("\nALL SPACELINT TESTS PASSED SUCCESSFULLY!")
 
 if __name__ == "__main__":

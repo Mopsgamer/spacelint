@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SpacelintConfig",
+  "description": "Configuration schema for spacelint whitespace linter.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path or URL to spacelint configuration schema."
+    },
+    "categories": {
+      "type": "object",
+      "description": "Rule category severity configuration.",
+      "properties": {
+        "all": {
+          "$ref": "#/definitions/severity"
+        },
+        "correctness": {
+          "$ref": "#/definitions/severity"
+        },
+        "style": {
+          "$ref": "#/definitions/severity"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rules": {
+      "$ref": "#/definitions/rulesObject"
+    },
+    "overrides": {
+      "type": "array",
+      "description": "File or pattern overrides for specific rules and categories.",
+      "items": {
+        "type": "object",
+        "required": ["files"],
+        "properties": {
+          "files": {
+            "description": "Glob pattern or list of glob patterns to match against file paths.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "categories": {
+            "$ref": "#/properties/categories"
+          },
+          "rules": {
+            "$ref": "#/definitions/rulesObject"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "severity": {
+      "description": "Rule or category severity level.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["off", "allow", "warn", "error", "deny"]
+        },
+        {
+          "type": "integer",
+          "enum": [0, 1, 2]
+        }
+      ]
+    },
+    "indentOption": {
+      "description": "Indentation option: number of spaces, or string 'tabs', 'auto', 'off'.",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "string",
+          "enum": ["tabs", "tab", "auto", "off"]
+        }
+      ]
+    },
+    "rulesObject": {
+      "type": "object",
+      "description": "Individual rule configurations.",
+      "properties": {
+        "no-trailing-spaces": {
+          "$ref": "#/definitions/severity"
+        },
+        "no-carriage-return": {
+          "$ref": "#/definitions/severity"
+        },
+        "no-mixed-spaces-and-tabs": {
+          "$ref": "#/definitions/severity"
+        },
+        "indent": {
+          "description": "Indentation rule severity or severity with options.",
+          "oneOf": [
+            {
+              "$ref": "#/definitions/severity"
+            },
+            {
+              "$ref": "#/definitions/indentOption"
+            },
+            {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/definitions/severity"
+                },
+                {
+                  "$ref": "#/definitions/indentOption"
+                }
+              ],
+              "minItems": 1,
+              "maxItems": 2
+            }
+          ]
+        }
+      },
+      "additionalProperties": {
+        "description": "Additional rule or plugin rule configuration.",
+        "oneOf": [
+          {
+            "$ref": "#/definitions/severity"
+          },
+          {
+            "type": "array"
+          }
+        ]
+      }
+    }
+  }
+}

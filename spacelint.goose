@@ -575,6 +575,7 @@ fn print_help() {
         "\x1b[1m\x1b[36mOptions:\x1b[0m\n",
         "  \x1b[1m-h, --help\x1b[0m               Print help information\n",
         "  \x1b[1m-v, -V, --version\x1b[0m        Print version information\n",
+        "      \x1b[1m--init\x1b[0m               Create a configuration file (.spacelintrc.json)\n",
         "      \x1b[1m--rules\x1b[0m              List all the rules that are currently registered\n",
         "      \x1b[1m--fix\x1b[0m                Automatically fix whitespace issues\n",
         "  \x1b[1m-i, --interactive\x1b[0m        Prompt to apply fix for each issue\n",
@@ -613,6 +614,40 @@ fn print_version() {
     print("spacelint 0.1.0");
 }
 
+fn run_init() {
+    let config_filename = ".spacelintrc.json";
+    var existing: u8[>..] = [];
+    if read_file(config_filename, existing) {
+        write_stdout("Configuration file .spacelintrc.json already exists.\n");
+        return;
+    }
+
+    var content: u8[>..] = [];
+    format(content,
+        "{\n",
+        "  \"$schema\": \"https://raw.githubusercontent.com/Mopsgamer/spacelint/main/configuration_schema.json\",\n",
+        "  \"categories\": {\n",
+        "    \"correctness\": \"warn\",\n",
+        "    \"style\": \"warn\"\n",
+        "  },\n",
+        "  \"rules\": {\n",
+        "    \"no-trailing-spaces\": \"warn\",\n",
+        "    \"no-carriage-return\": \"warn\",\n",
+        "    \"no-mixed-spaces-and-tabs\": \"warn\",\n",
+        "    \"indent\": \"warn\"\n",
+        "  },\n",
+        "  \"overrides\": []\n",
+        "}\n"
+    );
+
+    if write_file(config_filename, content) {
+        write_stdout("Created .spacelintrc.json\n");
+    } else {
+        write_stderr("Error: Failed to create .spacelintrc.json\n");
+        exit(1);
+    }
+}
+
 fn main() {
     let start_time = clock_ns();
     let cfg = parse_cli_args();
@@ -624,6 +659,11 @@ fn main() {
 
     if cfg.version {
         print_version();
+        return;
+    }
+
+    if cfg.init {
+        run_init();
         return;
     }
 

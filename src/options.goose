@@ -21,6 +21,7 @@ struct Config {
     cmd: SubCommand,
     help: bool,
     version: bool,
+    init: bool,
     rules: bool,
     fix: bool,
     interactive: bool,
@@ -462,6 +463,7 @@ fn parse_cli_args() -> Config {
         cmd: SubCommand.Lint,
         help: false,
         version: false,
+        init: false,
         rules: false,
         fix: false,
         interactive: false,
@@ -479,6 +481,8 @@ fn parse_cli_args() -> Config {
             cfg.help = true;
         } else if arg_str == "-v" || arg_str == "-V" || arg_str == "--version" {
             cfg.version = true;
+        } else if arg_str == "--init" {
+            cfg.init = true;
         } else if arg_str == "--rules" {
             cfg.rules = true;
         } else if arg_str == "--fix" {

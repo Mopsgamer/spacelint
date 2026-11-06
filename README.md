@@ -81,3 +81,119 @@ To run tests:
 ```bash
 python3 tests/run_tests.py
 ```
+
+## Configuration Guide
+
+`spacelint` supports configuration via `.spacelintrc.json` with full JSON Schema validation for editor autocomplete and documentation.
+
+### Initializing Configuration
+
+To set up a new configuration file in your project, run:
+
+```bash
+spacelint --init
+```
+
+This creates a `.spacelintrc.json` configuration file:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/Mopsgamer/spacelint/main/configuration_schema.json",
+  "categories": {
+    "correctness": "warn",
+    "style": "warn"
+  },
+  "rules": {
+    "no-trailing-spaces": "warn",
+    "no-carriage-return": "warn",
+    "no-mixed-spaces-and-tabs": "warn",
+    "indent": "warn"
+  },
+  "overrides": []
+}
+```
+
+### JSON Schema Integration
+
+`configuration_schema.json` provides a complete draft-07 JSON Schema for spacelint configurations. By referencing the schema URL in your `.spacelintrc.json` file:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/Mopsgamer/spacelint/main/configuration_schema.json"
+}
+```
+
+Modern IDEs and code editors (such as VS Code, Neovim with YAML/JSON Language Server, and JetBrains IDEs) automatically validate your configuration and offer auto-completion and documentation hovers for available rules, severities, and options. Alternatively, you can download `configuration_schema.json` into your repository and reference it relatively (e.g. `"$schema": "./configuration_schema.json"`).
+
+### Categories and Rules
+
+Spacelint classifies rules into categories:
+- **`correctness`**: Catches whitespace errors and syntax anomalies:
+  - `no-trailing-spaces`: Disallows trailing whitespace at line endings.
+  - `no-carriage-return`: Disallows carriage return (`\r`) characters.
+  - `no-mixed-spaces-and-tabs`: Disallows mixing tabs and spaces in indentation.
+- **`style`**: Formatting and indentation style preferences:
+  - `indent`: Enforces consistent space or tab indentation.
+- **`all`**: Targets all rules at once.
+
+### Severity Levels
+
+Categories and rules support the following severity values:
+- `"off"` / `"allow"` / `0`: Turn off the rule or category.
+- `"warn"` / `1`: Report issues as warnings without failing the exit code.
+- `"error"` / `"deny"` / `2`: Report issues as errors (returns exit code `1` on violation).
+
+### Indentation Configuration
+
+The `indent` rule can be configured to enforce specific indentation:
+- **Spaces**: `["warn", 2]`, `["error", 4]`, or simply `2` / `4`.
+- **Tabs**: `["warn", "tabs"]` or `"tabs"`.
+- **Auto-detection**: `["warn", "auto"]` or `"auto"`.
+- **Off**: `"off"`.
+
+### Overrides
+
+Projects often have files with different conventions (e.g. 2 spaces in Markdown/YAML and 4 spaces in source code), or directories containing fixture files or third-party assets that should not be linted.
+
+Use the `overrides` array to target files or directories using glob patterns:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/Mopsgamer/spacelint/main/configuration_schema.json",
+  "categories": {
+    "correctness": "warn"
+  },
+  "rules": {
+    "indent": ["warn", 4]
+  },
+  "overrides": [
+    {
+      "files": ["*.json", "*.md", "*.yml", "*.yaml"],
+      "rules": {
+        "indent": ["warn", 2]
+      }
+    },
+    {
+      "files": ["vendor/**", "fixtures/**"],
+      "categories": {
+        "all": "off"
+      }
+    }
+  ]
+}
+```
+
+### Using Your Configuration
+
+Point spacelint to your configuration file with `-c` or `--config`:
+
+```bash
+# Lint current directory with configuration
+spacelint -c .spacelintrc.json .
+
+# Automatically fix issues according to configuration
+spacelint -c .spacelintrc.json --fix .
+
+# Override specific rules from CLI
+spacelint -c .spacelintrc.json -D no-trailing-spaces .
+```

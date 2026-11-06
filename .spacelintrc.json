@@ -1,0 +1,26 @@
+{
+  "$schema": "./configuration_schema.json",
+  "categories": {
+    "correctness": "warn"
+  },
+  "rules": {
+    "no-trailing-spaces": "warn",
+    "no-carriage-return": "warn",
+    "no-mixed-spaces-and-tabs": "warn",
+    "indent": ["warn", 4]
+  },
+  "overrides": [
+    {
+      "files": ["*.json", "*.md", "*.yml", "*.yaml"],
+      "rules": {
+        "indent": ["warn", 2]
+      }
+    },
+    {
+      "files": ["tests/fixtures/**"],
+      "categories": {
+        "all": "off"
+      }
+    }
+  ]
+}
