@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-06
+
 ### Added
 
 - Support for `-f` and `--format` output option with `agent`, `stylish`, and `default` modes.
@@ -14,4 +16,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for rule configuration options via `-C`, `-W`/`--warn`, `-A`/`--allow`, `-D`/`--deny`, and `-c`/`--config`.
 - Support for `.spacelintrc.json`: rules and overrides.
 - Comprehensive test fixtures and automated regression tests across all supported file formats.
-
