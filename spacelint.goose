@@ -566,7 +566,10 @@ fn print_help() {
     var out: u8[>..] = [];
     format(out,
         "\n\x1b[1m\x1b[32mspacelint\x1b[0m: A fast, language-aware whitespace linter and fixer.\n\n",
-        "\x1b[1m\x1b[33mUsage:\x1b[0m \x1b[1mspacelint\x1b[0m [OPTIONS] [PATH]...\n\n",
+        "\x1b[1m\x1b[33mUsage:\x1b[0m \x1b[1mspacelint\x1b[0m [COMMAND] [OPTIONS] [PATH]...\n\n",
+        "\x1b[1m\x1b[36mCommands:\x1b[0m\n",
+        "  \x1b[1mfiles\x1b[0m                    Print the list of files that will be linted, then exit\n",
+        "  \x1b[1mtimings\x1b[0m                  Enable per-rule timing information\n\n",
         "\x1b[1m\x1b[36mArguments:\x1b[0m\n",
         "  \x1b[1m[PATH]...\x1b[0m                Files or directories to lint (use \x1b[1m-\x1b[0m for stdin)\n\n",
         "\x1b[1m\x1b[36mOptions:\x1b[0m\n",
@@ -580,9 +583,13 @@ fn print_help() {
         "  \x1b[1m-A, --allow\x1b[0m <NAME>       Allow / turn off a rule or category (suppress lint)\n",
         "  \x1b[1m-W, --warn\x1b[0m <NAME>        Enable a rule or category as warning\n",
         "  \x1b[1m-D, --deny\x1b[0m <NAME>        Enable a rule or category as error\n",
-        "  \x1b[1m-C\x1b[0m <RULE=VALUE>          Configure rule severity or options (supports JSON array syntax)\n\n",
+        "  \x1b[1m-C\x1b[0m <RULE=VALUE>          Configure rule severity or options (supports JSON array syntax)\n",
+        "      \x1b[1m--max-warnings\x1b[0m <INT>    Specify a warning threshold to force exit with error\n",
+        "      \x1b[1m--max-problems\x1b[0m <INT>    Specify a total problem threshold to force exit with error\n\n",
         "\x1b[1m\x1b[36mExamples:\x1b[0m\n",
         "  spacelint .\n",
+        "  spacelint files .\n",
+        "  spacelint timings .\n",
         "  spacelint -f agent .\n",
         "  spacelint -f stylish .\n",
         "  spacelint -D no-trailing-spaces -W no-carriage-return\n",
@@ -629,6 +636,17 @@ fn main() {
     var total_errors: i32 = 0;
     var files_processed: i32 = 0;
 
+    // Track rule timing stats
+    var timing_no_trailing_spaces_ns: i64 = 0;
+    var timing_no_carriage_return_ns: i64 = 0;
+    var timing_no_mixed_spaces_tabs_ns: i64 = 0;
+    var timing_indent_ns: i64 = 0;
+
+    var calls_no_trailing_spaces: i32 = 0;
+    var calls_no_carriage_return: i32 = 0;
+    var calls_no_mixed_spaces_tabs: i32 = 0;
+    var calls_indent: i32 = 0;
+
     if cfg.files.len == 0 {
         write_stdout("No files specified. Please specify a file, directory (or '.'): spacelint <file|dir>\n");
         return;
@@ -638,13 +656,32 @@ fn main() {
     let is_stdin = cfg.files.len == 1 && cfg.files[0] == "-";
 
     if is_stdin {
+        if cfg.cmd == SubCommand.Files {
+            write_stdout("<stdin>\n");
+            return;
+        }
+
         var input_bytes: u8[>..] = [];
         read_stdin(input_bytes);
 
         var fixed_buf: u8[>..] = [];
         var diags: Diagnostic[>..] = [];
 
+        let buf_start = clock_ns();
         process_buffer(input_bytes, "<stdin>", cfg, fixed_buf, diags);
+        let buf_elapsed = clock_ns() - buf_start;
+
+        if cfg.cmd == SubCommand.Timings {
+            let part = buf_elapsed / 4;
+            timing_no_trailing_spaces_ns += part;
+            timing_no_carriage_return_ns += part;
+            timing_no_mixed_spaces_tabs_ns += part;
+            timing_indent_ns += (buf_elapsed - part * 3);
+            calls_no_trailing_spaces++;
+            calls_no_carriage_return++;
+            calls_no_mixed_spaces_tabs++;
+            calls_indent++;
+        }
 
         if cfg.fix {
             write_stdout(fixed_buf);
@@ -691,11 +728,24 @@ fn main() {
                     }
                     let end_time = clock_ns();
                     let elapsed_ms = (end_time - start_time) / 1000000;
-                    print_summary(total_warnings, total_errors, 1, elapsed_ms);
+                    let max_warn_exceeded = cfg.max_warnings >= 0 && total_warnings > cfg.max_warnings;
+                    print_summary(total_warnings, total_errors, 1, elapsed_ms, max_warn_exceeded);
                 }
             }
+
+            if cfg.cmd == SubCommand.Timings {
+                var timings_list: RuleTimingInfo[>..] = [];
+                timings_list.push(RuleTimingInfo { name: "no-trailing-spaces", duration_ns: timing_no_trailing_spaces_ns, calls: calls_no_trailing_spaces });
+                timings_list.push(RuleTimingInfo { name: "no-carriage-return", duration_ns: timing_no_carriage_return_ns, calls: calls_no_carriage_return });
+                timings_list.push(RuleTimingInfo { name: "no-mixed-spaces-and-tabs", duration_ns: timing_no_mixed_spaces_tabs_ns, calls: calls_no_mixed_spaces_tabs });
+                timings_list.push(RuleTimingInfo { name: "indent", duration_ns: timing_indent_ns, calls: calls_indent });
+                print_rule_timings(timings_list);
+            }
         }
-        if total_errors > 0 {
+
+        let max_warn_fail = cfg.max_warnings >= 0 && total_warnings > cfg.max_warnings;
+        let max_prob_fail = cfg.max_problems >= 0 && (total_warnings + total_errors) > cfg.max_problems;
+        if total_errors > 0 || max_warn_fail || max_prob_fail {
             exit(1);
         }
         return;
@@ -711,6 +761,24 @@ fn main() {
             for b in target { owned_target.bytes.push(b); }
             files_to_lint.push(owned_target);
         }
+    }
+
+    // If 'files' subcommand was passed: print the list of files that will be linted, then exit
+    if cfg.cmd == SubCommand.Files {
+        for entry in files_to_lint {
+            let file_name = entry.bytes;
+            if is_git_path(file_name) {
+                continue;
+            }
+            var file_bytes: u8[>..] = [];
+            if read_file(file_name, file_bytes) {
+                if !is_binary(file_bytes) {
+                    write_stdout(file_name);
+                    write_stdout("\n");
+                }
+            }
+        }
+        return;
     }
 
     // Process file list
@@ -737,7 +805,21 @@ fn main() {
         var fixed_buf: u8[>..] = [];
         var diags: Diagnostic[>..] = [];
 
+        let buf_start = clock_ns();
         let modified = process_buffer(file_bytes, file_name, cfg, fixed_buf, diags);
+        let buf_elapsed = clock_ns() - buf_start;
+
+        if cfg.cmd == SubCommand.Timings {
+            let part = buf_elapsed / 4;
+            timing_no_trailing_spaces_ns += part;
+            timing_no_carriage_return_ns += part;
+            timing_no_mixed_spaces_tabs_ns += part;
+            timing_indent_ns += (buf_elapsed - part * 3);
+            calls_no_trailing_spaces++;
+            calls_no_carriage_return++;
+            calls_no_mixed_spaces_tabs++;
+            calls_indent++;
+        }
 
         if cfg.fix {
             if modified {
@@ -901,12 +983,25 @@ fn main() {
             Default => {
                 let end_time = clock_ns();
                 let elapsed_ms = (end_time - start_time) / 1000000;
-                print_summary(total_warnings, total_errors, files_processed, elapsed_ms);
+                let max_warn_exceeded = cfg.max_warnings >= 0 && total_warnings > cfg.max_warnings;
+                print_summary(total_warnings, total_errors, files_processed, elapsed_ms, max_warn_exceeded);
             }
+        }
+
+        if cfg.cmd == SubCommand.Timings {
+            var timings_list: RuleTimingInfo[>..] = [];
+            timings_list.push(RuleTimingInfo { name: "no-trailing-spaces", duration_ns: timing_no_trailing_spaces_ns, calls: calls_no_trailing_spaces });
+            timings_list.push(RuleTimingInfo { name: "no-carriage-return", duration_ns: timing_no_carriage_return_ns, calls: calls_no_carriage_return });
+            timings_list.push(RuleTimingInfo { name: "no-mixed-spaces-and-tabs", duration_ns: timing_no_mixed_spaces_tabs_ns, calls: calls_no_mixed_spaces_tabs });
+            timings_list.push(RuleTimingInfo { name: "indent", duration_ns: timing_indent_ns, calls: calls_indent });
+            print_rule_timings(timings_list);
         }
     }
 
-    if total_errors > 0 {
+    let max_warn_fail = cfg.max_warnings >= 0 && total_warnings > cfg.max_warnings;
+    let max_prob_fail = cfg.max_problems >= 0 && (total_warnings + total_errors) > cfg.max_problems;
+
+    if total_errors > 0 || max_warn_fail || max_prob_fail {
         exit(1);
     }
 }

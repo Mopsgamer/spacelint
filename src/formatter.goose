@@ -229,7 +229,7 @@ fn print_stylish_summary(warnings: i32, errors: i32) {
     write_stdout(out);
 }
 
-fn print_summary(warnings: i32, errors: i32, files_count: i32, elapsed_ms: i64) {
+fn print_summary(warnings: i32, errors: i32, files_count: i32, elapsed_ms: i64, max_warnings_exceeded: bool) {
     var out: u8[>..] = [];
 
     if errors > 0 {
@@ -250,6 +250,89 @@ fn print_summary(warnings: i32, errors: i32, files_count: i32, elapsed_ms: i64) 
         format(out, ANSI_DIM, " (", sec, "s)", ANSI_RESET, "\n");
     } else {
         format(out, ANSI_DIM, " (", elapsed_ms, "ms)", ANSI_RESET, "\n");
+    }
+
+    if max_warnings_exceeded {
+        format(out, "Exceeded maximum number of warnings. Found ", warnings, ".\n");
+    }
+
+    write_stdout(out);
+}
+
+struct RuleTimingInfo {
+    name: const u8[:],
+    duration_ns: i64,
+    calls: i32
+}
+
+fn print_rule_timings(timings: RuleTimingInfo[>..]&) {
+    var total_ns: i64 = 0;
+    for t in timings {
+        total_ns += t.duration_ns;
+    }
+    let total_millis = (total_ns as! f64) / 1000000.0;
+
+    var out: u8[>..] = [];
+    format(out,
+        "\nRule timings:\n",
+        "Rule                                Time (ms)  Relative  Calls  Source\n",
+        "---------------------------------  ----------  --------  -----  ------\n"
+    );
+
+    for t in timings {
+        let millis = (t.duration_ns as! f64) / 1000000.0;
+        let relative = if total_millis > 0.0 { (millis / total_millis) * 100.0 } else { 0.0 };
+
+        // Rule name column: width 33, left aligned
+        var r_pad = 33 - (t.name.len as! i32);
+        format(out, t.name);
+        while r_pad > 0 {
+            out.push(' ');
+            r_pad--;
+        }
+        format(out, "  ");
+
+        // Time (ms) column: width 10, right aligned with 3 decimals
+        let millis_int = millis as! i64;
+        let millis_frac = ((millis - millis_int) * 1000.0) as! i64;
+        var frac_str: u8[>..] = [];
+        if millis_frac < 10 {
+            format(frac_str, "00", millis_frac);
+        } else if millis_frac < 100 {
+            format(frac_str, "0", millis_frac);
+        } else {
+            format(frac_str, millis_frac);
+        }
+
+        var time_str: u8[>..] = [];
+        format(time_str, millis_int, ".", frac_str);
+        var t_pad = 10 - (time_str.len as! i32);
+        while t_pad > 0 {
+            out.push(' ');
+            t_pad--;
+        }
+        format(out, time_str, "  ");
+
+        // Relative column: width 7, right aligned with 1 decimal + '%'
+        let rel_int = relative as! i64;
+        let rel_frac = ((relative - rel_int) * 10.0) as! i64;
+        var rel_str: u8[>..] = [];
+        format(rel_str, rel_int, ".", rel_frac, "%");
+        var rel_pad = 8 - (rel_str.len as! i32);
+        while rel_pad > 0 {
+            out.push(' ');
+            rel_pad--;
+        }
+        format(out, rel_str, "  ");
+
+        // Calls column: width 5, right aligned
+        let calls_digits = get_num_digits(t.calls);
+        var c_pad = 5 - calls_digits;
+        while c_pad > 0 {
+            out.push(' ');
+            c_pad--;
+        }
+        format(out, t.calls, "  native\n");
     }
 
     write_stdout(out);

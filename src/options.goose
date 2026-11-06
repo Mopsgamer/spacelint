@@ -11,13 +11,22 @@ enum FormatOption {
     Stylish
 }
 
+enum SubCommand {
+    Lint,
+    Files,
+    Timings
+}
+
 struct Config {
+    cmd: SubCommand,
     help: bool,
     version: bool,
     rules: bool,
     fix: bool,
     interactive: bool,
     format: FormatOption,
+    max_warnings: i32,
+    max_problems: i32,
     rules_cfg: RulesConfig,
     files: (const u8[:])[>..]
 }
@@ -450,12 +459,15 @@ fn load_config_file(rc: RulesConfig&, path: const u8[:]) -> bool {
 fn parse_cli_args() -> Config {
     let raw = args();
     var cfg = Config {
+        cmd: SubCommand.Lint,
         help: false,
         version: false,
         rules: false,
         fix: false,
         interactive: false,
         format: FormatOption.Default,
+        max_warnings: -1,
+        max_problems: -1,
         rules_cfg: default_rules_config(),
         files: []
     };
@@ -480,6 +492,24 @@ fn parse_cli_args() -> Config {
             cfg.format = parse_format_val(arg_str[9..]);
         } else if arg_str.len > 3 && arg_str[0..3] == "-f=" {
             cfg.format = parse_format_val(arg_str[3..]);
+        } else if arg_str == "--max-warnings" {
+            i++;
+            if i < raw.len {
+                let n, ok = parse_int(raw[i]);
+                if ok { cfg.max_warnings = n as! i32; }
+            }
+        } else if arg_str.len > 15 && arg_str[0..15] == "--max-warnings=" {
+            let n, ok = parse_int(arg_str[15..]);
+            if ok { cfg.max_warnings = n as! i32; }
+        } else if arg_str == "--max-problems" {
+            i++;
+            if i < raw.len {
+                let n, ok = parse_int(raw[i]);
+                if ok { cfg.max_problems = n as! i32; }
+            }
+        } else if arg_str.len > 15 && arg_str[0..15] == "--max-problems=" {
+            let n, ok = parse_int(arg_str[15..]);
+            if ok { cfg.max_problems = n as! i32; }
         } else if arg_str == "-c" || arg_str == "--config" {
             i++;
             if i < raw.len {
@@ -523,6 +553,10 @@ fn parse_cli_args() -> Config {
             }
         } else if arg_str.len > 3 && arg_str[0..3] == "-C=" {
             parse_c_flag(cfg.rules_cfg, arg_str[3..]);
+        } else if arg_str == "files" && cfg.cmd == SubCommand.Lint && cfg.files.len == 0 {
+            cfg.cmd = SubCommand.Files;
+        } else if arg_str == "timings" && cfg.cmd == SubCommand.Lint && cfg.files.len == 0 {
+            cfg.cmd = SubCommand.Timings;
         } else if arg_str.len > 0 && arg_str[0] == '-' && arg_str != "-" {
             // ignore other options or plugin flags (e.g. --typescript-plugin)
         } else {

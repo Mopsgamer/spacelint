@@ -49,6 +49,11 @@ def test_cli_flags():
     assert code == 0, f"-v failed: code={code}"
     assert "spacelint" in out, "-v output missing spacelint"
 
+    # -V
+    code, out, _ = run_cmd([SPACELINT_BIN, "-V"])
+    assert code == 0, f"-V failed: code={code}"
+    assert "spacelint" in out, "-V output missing spacelint"
+
     print("  CLI flags tests passed!")
 
 def test_language_fixtures():
@@ -528,6 +533,86 @@ def test_format_options():
 
     print("  Format options tests passed!")
 
+def test_files_and_timings_commands():
+    print("Testing files and timings subcommands...")
+    sample_file = os.path.join(FIXTURES_DIR, "test.js")
+
+    # 1. files subcommand
+    code, out, _ = run_cmd([SPACELINT_BIN, "files", sample_file])
+    assert code == 0, f"files subcommand failed: code={code}"
+    lines = [line.strip() for line in out.strip().split("\n") if line.strip()]
+    assert len(lines) == 1
+    assert lines[0] == sample_file
+
+    # files subcommand with directory
+    code, out, _ = run_cmd([SPACELINT_BIN, "files", FIXTURES_DIR])
+    assert code == 0
+    lines = [line.strip() for line in out.strip().split("\n") if line.strip()]
+    assert len(lines) > 10
+    assert any("test.ts" in line for line in lines)
+    assert any("test.js" in line for line in lines)
+
+    # 2. timings subcommand
+    code, out, _ = run_cmd([SPACELINT_BIN, "timings", sample_file])
+    assert code == 0, f"timings subcommand failed: code={code}"
+    assert "Rule timings:" in out
+    assert "no-trailing-spaces" in out
+    assert "no-carriage-return" in out
+    assert "no-mixed-spaces-and-tabs" in out
+    assert "indent" in out
+    assert "Time (ms)" in out
+    assert "Relative" in out
+    assert "Calls" in out
+    assert "native" in out
+
+    print("  files and timings subcommand tests passed!")
+
+def test_limiters_max_warnings_and_problems():
+    print("Testing --max-warnings and --max-problems limiters...")
+    sample_file = os.path.join(FIXTURES_DIR, "test.js")
+
+    # 1. --max-warnings
+    # test.js has 1 warning (no-trailing-spaces).
+    # If max-warnings=0, threshold is exceeded -> exit code 1
+    code, out, _ = run_cmd([SPACELINT_BIN, "--max-warnings=0", sample_file])
+    assert code == 1, f"--max-warnings=0 should return exit code 1, got {code}"
+    assert "Exceeded maximum number of warnings. Found 1." in out
+    assert "no-trailing-spaces" in out  # Diagnostics are unlimited
+
+    # With space syntax: --max-warnings 0
+    code, out, _ = run_cmd([SPACELINT_BIN, "--max-warnings", "0", sample_file])
+    assert code == 1
+    assert "Exceeded maximum number of warnings. Found 1." in out
+
+    # If max-warnings=1, threshold is not exceeded (1 <= 1) -> exit code 0
+    code, out, _ = run_cmd([SPACELINT_BIN, "--max-warnings=1", sample_file])
+    assert code == 0
+    assert "Exceeded maximum number of warnings" not in out
+    assert "no-trailing-spaces" in out
+
+    # 2. --max-problems
+    # test.js has 1 warning, 0 errors -> total problems = 1.
+    # If max-problems=0, threshold is exceeded -> exit code 1
+    code, out, _ = run_cmd([SPACELINT_BIN, "--max-problems=0", sample_file])
+    assert code == 1
+    assert "no-trailing-spaces" in out  # Diagnostics are unlimited
+
+    # With space syntax: --max-problems 0
+    code, out, _ = run_cmd([SPACELINT_BIN, "--max-problems", "0", sample_file])
+    assert code == 1
+
+    # If max-problems=1, threshold is not exceeded (1 <= 1) -> exit code 0
+    code, out, _ = run_cmd([SPACELINT_BIN, "--max-problems=1", sample_file])
+    assert code == 0
+    assert "no-trailing-spaces" in out
+
+    # With denied rule: -D no-trailing-spaces produces 1 error, 0 warnings -> total problems = 1.
+    # --max-problems=0 fails
+    code, out, _ = run_cmd([SPACELINT_BIN, "-D", "no-trailing-spaces", "--max-problems=0", sample_file])
+    assert code == 1
+
+    print("  Limiters --max-warnings and --max-problems tests passed!")
+
 def main():
     test_cli_flags()
     test_language_fixtures()
@@ -539,6 +624,8 @@ def main():
     test_rule_options_and_categories()
     test_config_overrides()
     test_format_options()
+    test_files_and_timings_commands()
+    test_limiters_max_warnings_and_problems()
     print("\nALL SPACELINT TESTS PASSED SUCCESSFULLY!")
 
 if __name__ == "__main__":
