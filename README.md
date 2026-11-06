@@ -33,7 +33,7 @@ If you have [packslip](https://packslip.dev) or [mise](https://mise.jdx.dev) ins
 ```bash
 packslip install github.com/Mopsgamer/spacelint
 # or (recommended)
-mise use -g packlist:github.com/Mopsgamer/spacelint
+mise use -g packslip:github.com/Mopsgamer/spacelint
 ```
 
 Packslip verifies the cryptographic sigstore attestation (`packslip.sigstore.json`), downloads the appropriate binary for your OS and architecture, and links it into `~/.local/bin/`.
