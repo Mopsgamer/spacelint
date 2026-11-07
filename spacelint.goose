@@ -610,7 +610,7 @@ fn print_help() {
         "  Pass \"", c_bold(), "-", c_reset(), "\" as path to read from standard input (e.g. ", c_dim(), "cat file | spacelint -", c_reset(), ").\n",
         "  Use with ", c_bold(), "--fix", c_reset(), " to write fixed output directly to stdout.\n\n",
         c_bold(), c_cyan(), "Supported file types:", c_reset(), "\n",
-        "  ", c_dim(), "TypeScript, JavaScript, JSON, YAML, XML, PROPS, INI, TOML, C++, C, Rust, Zig, Markdown, MDX, Goose, Vlang, D, Lua, Assembly, AssemblyScript, Kotlin, Java, Dart, Odin, Python, Go, Ruby, Shell, PHP, Swift, C#, Scala, CSS, SQL, R, Julia, Perl, Elixir, Erlang, Haskell, Elm, PureScript, GraphQL, Dockerfile, Makefile, Nix, Terraform, Vue, Svelte, Astro, Fortran, Ada, Pascal, OCaml, Clojure, F#, Groovy, PowerShell, Solidity, Nim, Crystal, CMake, Protobuf, Shaders, GameDev, CSV, TSV, etc.", c_reset(), "\n"
+        "  ", c_dim(), "TypeScript, JavaScript, JSON, YAML, XML, PROPS, INI, TOML, C++, C, Rust, Zig, Markdown, MDX, Goose, Vlang, D, Lua, Assembly, AssemblyScript, Kotlin, Java, Dart, Odin, Python, Go, Ruby, Shell, PHP, Swift, C#, Scala, CSS, SQL, R, Julia, Perl, Elixir, Erlang, Haskell, Elm, PureScript, GraphQL, Dockerfile, Makefile, Nix, Terraform, Vue, Svelte, Astro, Fortran, Ada, Pascal, OCaml, Clojure, F#, Groovy, PowerShell, Solidity, Nim, Crystal, CMake, Protobuf, Shaders (GLSL, HLSL, WGSL, Metal, Cg, OpenCL, Godot), GameDev (GML, Wren, Squirrel, UnrealScript, QuakeC, Papyrus, GDScript), CSV, TSV, etc.", c_reset(), "\n"
     );
     write_stdout(out);
 }

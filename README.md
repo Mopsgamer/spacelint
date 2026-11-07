@@ -3,7 +3,7 @@
 A fast, language-aware whitespace linter and fixer CLI written in the [Goose programming language](https://github.com/aardappel/goose).
 
 ## Features
-- **Language Aware**: Understands file extensions and rules for TypeScript, JavaScript, JSON, YAML, XML, PROPS, INI, TOML, C++, C, Rust, Zig, Markdown, MDX, Goose, Vlang, D, Lua, Assembly, AssemblyScript, Kotlin, Java, Dart, Odin, Python, Go, Ruby, Shell, PHP, Swift, C#, Scala, CSS, SQL, R, Julia, Perl, Elixir, Erlang, Haskell, Elm, PureScript, GraphQL, Dockerfile, Makefile, Nix, Terraform, Vue, Svelte, Astro, Fortran, Ada, Pascal, OCaml, Clojure, F#, Groovy, PowerShell, Solidity, Nim, Crystal, CMake, Protobuf, Shaders, GameDev, CSV, TSV, and more.
+- **Language Aware**: Understands file extensions and rules for TypeScript, JavaScript, JSON, YAML, XML, PROPS, INI, TOML, C++, C, Rust, Zig, Markdown, MDX, Goose, Vlang, D, Lua, Assembly, AssemblyScript, Kotlin, Java, Dart, Odin, Python, Go, Ruby, Shell, PHP, Swift, C#, Scala, CSS, SQL, R, Julia, Perl, Elixir, Erlang, Haskell, Elm, PureScript, GraphQL, Dockerfile, Makefile, Nix, Terraform, Vue, Svelte, Astro, Fortran, Ada, Pascal, OCaml, Clojure, F#, Groovy, PowerShell, Solidity, Nim, Crystal, CMake, Protobuf, Shaders (GLSL, HLSL, WGSL, Metal, Cg, OpenCL, Godot Shaders), GameDev scripts (GameMaker GML, Wren, Squirrel, UnrealScript, QuakeC, Bethesda Papyrus, Godot GDScript), CSV, TSV, and more.
 - **Rich Diagnostics Output**: Diagnostics and summaries formatted with line numbers, code snippets, caret underlines, and timing stats.
 - **Multiple Output Formats**:
   - `-f default` / `--format default`: Full visual diagnostics with code snippets and caret underlines.
