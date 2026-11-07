@@ -565,29 +565,32 @@ fn collect_dir(dir_path: const u8[:], out: PathBuf[>..]&) {
 fn print_help() {
     var out: u8[>..] = [];
     format(out,
-        "\n\x1b[1m\x1b[32mspacelint\x1b[0m: A fast, language-aware whitespace linter and fixer.\n\n",
-        "\x1b[1m\x1b[33mUsage:\x1b[0m \x1b[1mspacelint\x1b[0m [COMMAND] [OPTIONS] [PATH]...\n\n",
-        "\x1b[1m\x1b[36mCommands:\x1b[0m\n",
-        "  \x1b[1mfiles\x1b[0m                    Print the list of files that will be linted, then exit\n",
-        "  \x1b[1mtimings\x1b[0m                  Enable per-rule timing information\n\n",
-        "\x1b[1m\x1b[36mArguments:\x1b[0m\n",
-        "  \x1b[1m[PATH]...\x1b[0m                Files or directories to lint (use \x1b[1m-\x1b[0m for stdin)\n\n",
-        "\x1b[1m\x1b[36mOptions:\x1b[0m\n",
-        "  \x1b[1m-h, --help\x1b[0m               Print help information\n",
-        "  \x1b[1m-v, -V, --version\x1b[0m        Print version information\n",
-        "      \x1b[1m--init\x1b[0m               Create a configuration file (.spacelintrc.json)\n",
-        "      \x1b[1m--rules\x1b[0m              List all the rules that are currently registered\n",
-        "      \x1b[1m--fix\x1b[0m                Automatically fix whitespace issues\n",
-        "  \x1b[1m-i, --interactive\x1b[0m        Prompt to apply fix for each issue\n",
-        "  \x1b[1m-f, --format\x1b[0m <FORMAT>    Use a specific output format (default, agent, stylish)\n",
-        "  \x1b[1m-c, --config\x1b[0m <PATH>      Configuration file (JSON format)\n",
-        "  \x1b[1m-A, --allow\x1b[0m <NAME>       Allow / turn off a rule or category (suppress lint)\n",
-        "  \x1b[1m-W, --warn\x1b[0m <NAME>        Enable a rule or category as warning\n",
-        "  \x1b[1m-D, --deny\x1b[0m <NAME>        Enable a rule or category as error\n",
-        "  \x1b[1m-C\x1b[0m <RULE=VALUE>          Configure rule severity or options (supports JSON array syntax)\n",
-        "      \x1b[1m--max-warnings\x1b[0m <INT>    Specify a warning threshold to force exit with error\n",
-        "      \x1b[1m--max-problems\x1b[0m <INT>    Specify a total problem threshold to force exit with error\n\n",
-        "\x1b[1m\x1b[36mExamples:\x1b[0m\n",
+        "\n", c_bold(), c_green(), "spacelint", c_reset(), ": A fast, language-aware whitespace linter and fixer.\n\n",
+        c_bold(), c_yellow(), "Usage:", c_reset(), " ", c_bold(), "spacelint", c_reset(), " [COMMAND] [OPTIONS] [PATH]...\n\n",
+        c_bold(), c_cyan(), "Commands:", c_reset(), "\n",
+        "  ", c_bold(), "files", c_reset(), "                    Print the list of files that will be linted, then exit\n",
+        "  ", c_bold(), "timings", c_reset(), "                  Enable per-rule timing information\n\n",
+        c_bold(), c_cyan(), "Arguments:", c_reset(), "\n",
+        "  ", c_bold(), "[PATH]...", c_reset(), "                Files or directories to lint (use ", c_bold(), "-", c_reset(), " for stdin)\n\n",
+        c_bold(), c_cyan(), "Options:", c_reset(), "\n",
+        "  ", c_bold(), "-h, --help", c_reset(), "               Print help information\n",
+        "  ", c_bold(), "-v, -V, --version", c_reset(), "        Print version information\n",
+        "      ", c_bold(), "--init", c_reset(), "               Create a configuration file (.spacelintrc.json)\n",
+        "      ", c_bold(), "--rules", c_reset(), "              List all the rules that are currently registered\n",
+        "      ", c_bold(), "--fix", c_reset(), "                Automatically fix whitespace issues\n",
+        "  ", c_bold(), "-i, --interactive", c_reset(), "        Prompt to apply fix for each issue\n",
+        "      ", c_bold(), "--no-color", c_reset(), "           Disable color output (also respects NO_COLOR env)\n"
+    );
+    format(out,
+        "  ", c_bold(), "-f, --format", c_reset(), " <FORMAT>    Use a specific output format (default, agent, stylish)\n",
+        "  ", c_bold(), "-c, --config", c_reset(), " <PATH>      Configuration file (JSON format)\n",
+        "  ", c_bold(), "-A, --allow", c_reset(), " <NAME>       Allow / turn off a rule or category (suppress lint)\n",
+        "  ", c_bold(), "-W, --warn", c_reset(), " <NAME>        Enable a rule or category as warning\n",
+        "  ", c_bold(), "-D, --deny", c_reset(), " <NAME>        Enable a rule or category as error\n",
+        "  ", c_bold(), "-C", c_reset(), " <RULE=VALUE>          Configure rule severity or options (supports JSON array syntax)\n",
+        "      ", c_bold(), "--max-warnings", c_reset(), " <INT>    Specify a warning threshold to force exit with error\n",
+        "      ", c_bold(), "--max-problems", c_reset(), " <INT>    Specify a total problem threshold to force exit with error\n\n",
+        c_bold(), c_cyan(), "Examples:", c_reset(), "\n",
         "  spacelint .\n",
         "  spacelint files .\n",
         "  spacelint timings .\n",
@@ -600,12 +603,14 @@ fn print_help() {
         "  spacelint -C 'indent=[\"error\", 2]'\n",
         "  spacelint -c .spacelintrc.json src/\n",
         "  cat file.js | spacelint -\n",
-        "  cat file.js | spacelint --fix - > fixed.js\n\n",
-        "\x1b[1m\x1b[36mStdin / Piping:\x1b[0m\n",
-        "  Pass \"\x1b[1m-\x1b[0m\" as path to read from standard input (e.g. \x1b[2mcat file | spacelint -\x1b[0m).\n",
-        "  Use with \x1b[1m--fix\x1b[0m to write fixed output directly to stdout.\n\n",
-        "\x1b[1m\x1b[36mSupported file types:\x1b[0m\n",
-        "  \x1b[2mTypeScript, JavaScript, JSON, YAML, XML, PROPS, INI, TOML, C++, C, Rust, Zig, Markdown, MDX, Goose, Vlang, D, Lua, Assembly, AssemblyScript, Kotlin, Java, Dart, Odin, Python, Go, Ruby, Shell, PHP, Swift, C#, Scala, CSS, SQL, R, Julia, Perl, Elixir, Erlang, Haskell, Elm, PureScript, GraphQL, Dockerfile, Makefile, Nix, Terraform, Vue, Svelte, Astro, Fortran, Ada, Pascal, OCaml, Clojure, F#, Groovy, PowerShell, Solidity, Nim, Crystal, CMake, Protobuf, Shaders, GameDev, CSV, TSV, etc.\x1b[0m\n"
+        "  cat file.js | spacelint --fix - > fixed.js\n\n"
+    );
+    format(out,
+        c_bold(), c_cyan(), "Stdin / Piping:", c_reset(), "\n",
+        "  Pass \"", c_bold(), "-", c_reset(), "\" as path to read from standard input (e.g. ", c_dim(), "cat file | spacelint -", c_reset(), ").\n",
+        "  Use with ", c_bold(), "--fix", c_reset(), " to write fixed output directly to stdout.\n\n",
+        c_bold(), c_cyan(), "Supported file types:", c_reset(), "\n",
+        "  ", c_dim(), "TypeScript, JavaScript, JSON, YAML, XML, PROPS, INI, TOML, C++, C, Rust, Zig, Markdown, MDX, Goose, Vlang, D, Lua, Assembly, AssemblyScript, Kotlin, Java, Dart, Odin, Python, Go, Ruby, Shell, PHP, Swift, C#, Scala, CSS, SQL, R, Julia, Perl, Elixir, Erlang, Haskell, Elm, PureScript, GraphQL, Dockerfile, Makefile, Nix, Terraform, Vue, Svelte, Astro, Fortran, Ada, Pascal, OCaml, Clojure, F#, Groovy, PowerShell, Solidity, Nim, Crystal, CMake, Protobuf, Shaders, GameDev, CSV, TSV, etc.", c_reset(), "\n"
     );
     write_stdout(out);
 }
@@ -651,6 +656,7 @@ fn run_init() {
 fn main() {
     let start_time = clock_ns();
     let cfg = parse_cli_args();
+    set_color_enabled(cfg.use_color);
 
     if cfg.help {
         print_help();
@@ -900,7 +906,9 @@ fn main() {
                     format_diagnostic(diag_out, file_name, d.line, d.col, d.end_col, d.rule, d.message, line_cnt, d.severity);
                     write_stdout(diag_out);
 
-                    write_stdout("  \x1b[1m\x1b[36mApply fix? [yes / no / all / quit] (default: no):\x1b[0m ");
+                    var prompt_str: u8[>..] = [];
+                    format(prompt_str, "  ", c_bold(), c_cyan(), "Apply fix? [yes / no / all / quit] (default: no):", c_reset(), " ");
+                    write_stdout(prompt_str);
                     var ans_buf: u8[>..] = [];
                     read_stdin(ans_buf);
 
@@ -926,7 +934,9 @@ fn main() {
 
                 if should_fix_file && modified {
                     write_file(file_name, fixed_buf);
-                    write_stdout("  \x1b[32m✔ File updated.\x1b[0m\n");
+                    var updated_msg: u8[>..] = [];
+                    format(updated_msg, "  ", c_green(), "✔ File updated.", c_reset(), "\n");
+                    write_stdout(updated_msg);
                 }
             }
         } else {

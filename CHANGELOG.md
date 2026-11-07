@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support for Windows ARM64 build target (`spacelint-windows-arm64.exe`).
+- Terminal TTY detection to automatically enable color output only when connected to a terminal.
+- Support for `NO_COLOR` environment variable and `--no-color` command-line flag to disable colored output.
+
 ## [0.2.0] - 2026-11-06
 
 ### Added

@@ -11,16 +11,41 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPACELINT_BIN = os.path.join(ROOT_DIR, "spacelint")
 FIXTURES_DIR = os.path.join(ROOT_DIR, "tests", "fixtures")
 
-def run_cmd(cmd, input_data=None):
+def run_cmd(cmd, input_data=None, env=None):
     proc = subprocess.run(
         cmd,
         cwd=ROOT_DIR,
         input=input_data.encode("utf-8") if input_data else None,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=env,
         text=False
     )
     return proc.returncode, proc.stdout.decode("utf-8", errors="replace"), proc.stderr.decode("utf-8", errors="replace")
+
+def run_cmd_pty(cmd, env=None):
+    import pty
+    master, slave = pty.openpty()
+    proc = subprocess.Popen(
+        cmd,
+        cwd=ROOT_DIR,
+        stdout=slave,
+        stderr=slave,
+        env=env
+    )
+    os.close(slave)
+    raw = b""
+    while True:
+        try:
+            chunk = os.read(master, 1024)
+            if not chunk:
+                break
+            raw += chunk
+        except OSError:
+            break
+    os.close(master)
+    proc.wait()
+    return proc.returncode, raw.decode("utf-8", errors="replace")
 
 def strip_ansi(text):
     return re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', text)
@@ -487,16 +512,17 @@ def test_format_options():
     assert code == 0
     assert f"{sample_file}:2:16: warning spacelint(no-trailing-spaces): Trailing whitespace found\n" == out
 
-    # 2. -f stylish
+    # 2. -f stylish (piped: no ANSI by default due to TTY detection)
     code, out, _ = run_cmd([SPACELINT_BIN, "-f", "stylish", sample_file])
     assert code == 0, f"-f stylish failed: code={code}"
-    # Verify file underline header
-    assert f"\x1b[4m{sample_file}\x1b[0m" in out
-    # Verify warning and rule
     assert "warning" in out and "spacelint(no-trailing-spaces)" in out
-    # Verify stylish summary
     clean_out = strip_ansi(out)
     assert "✖ 1 problem (0 errors, 1 warning)" in clean_out
+
+    # In TTY / PTY mode, stylish outputs ANSI escape sequences
+    code_pty, out_pty = run_cmd_pty([SPACELINT_BIN, "-f", "stylish", sample_file])
+    assert code_pty == 0
+    assert f"\x1b[4m{sample_file}\x1b[0m" in out_pty
 
     # Test stylish with error severity
     code, out, _ = run_cmd([SPACELINT_BIN, "-f", "stylish", "-D", "no-trailing-spaces", sample_file])
@@ -512,20 +538,20 @@ def test_format_options():
     # Test stylish with stdin
     code, out, _ = run_cmd([SPACELINT_BIN, "-f", "stylish", "-"], input_data="var a = 1; \n")
     assert code == 0
-    assert "\x1b[4m<stdin>\x1b[0m" in out
     assert "✖ 1 problem (0 errors, 1 warning)" in strip_ansi(out)
 
-    # 3. -f default
+    # 3. -f default (piped: no ANSI by default due to TTY detection)
     code, out, _ = run_cmd([SPACELINT_BIN, "-f", "default", sample_file])
     assert code == 0, f"-f default failed: code={code}"
-    # Bold blue file path in header
-    assert f"\x1b[1m\x1b[34m{sample_file}\x1b[0m" in out
-    # Magenta underline with horizontal dashes (─)
-    assert "\x1b[35m" in out
     assert "───" in out
-    # Default summary
     clean_out = strip_ansi(out)
     assert "Found 1 warning on 1 file" in clean_out
+
+    # In TTY / PTY mode, default format outputs ANSI escape sequences
+    code_pty, out_pty = run_cmd_pty([SPACELINT_BIN, "-f", "default", sample_file])
+    assert code_pty == 0
+    assert f"\x1b[1m\x1b[34m{sample_file}\x1b[0m" in out_pty
+    assert "\x1b[35m" in out_pty
 
     # Test --format=default
     code, out, _ = run_cmd([SPACELINT_BIN, "--format=default", sample_file])
@@ -682,6 +708,91 @@ def test_init_command_and_schema():
 
     print("  --init command and configuration schema tests passed!")
 
+def test_tty_and_color_detection():
+    print("Testing TTY detection, NO_COLOR, and --no-color...")
+    sample_file = os.path.join(FIXTURES_DIR, "test.js")
+
+    # 1. Non-TTY / Piped execution should not contain ANSI escape codes
+    code, out, _ = run_cmd([SPACELINT_BIN, "-f", "default", sample_file])
+    assert code == 0
+    assert "\x1b[" not in out, f"Non-TTY stdout should not contain ANSI escape codes, got {repr(out)}"
+
+    code, out, _ = run_cmd([SPACELINT_BIN, "-f", "stylish", sample_file])
+    assert code == 0
+    assert "\x1b[" not in out
+
+    code, out, _ = run_cmd([SPACELINT_BIN, "--help"])
+    assert code == 0
+    assert "\x1b[" not in out
+
+    # 2. PTY execution (simulated TTY) SHOULD contain ANSI escape codes when no disabling flags/vars
+    code, out = run_cmd_pty([SPACELINT_BIN, "-f", "default", sample_file])
+    assert code == 0
+    assert "\x1b[" in out, "TTY stdout should contain ANSI colors"
+
+    code, out = run_cmd_pty([SPACELINT_BIN, "-f", "stylish", sample_file])
+    assert code == 0
+    assert "\x1b[" in out, "TTY stdout should contain ANSI colors"
+
+    code, out = run_cmd_pty([SPACELINT_BIN, "--help"])
+    assert code == 0
+    assert "\x1b[" in out, "TTY stdout should contain ANSI colors in help"
+
+    # 3. --no-color flag in PTY execution MUST disable ANSI escape codes
+    code, out = run_cmd_pty([SPACELINT_BIN, "--no-color", "-f", "default", sample_file])
+    assert code == 0
+    assert "\x1b[" not in out, f"--no-color should disable ANSI colors in PTY, got {repr(out)}"
+
+    code, out = run_cmd_pty([SPACELINT_BIN, "-f", "stylish", "--no-color", sample_file])
+    assert code == 0
+    assert "\x1b[" not in out
+
+    code, out = run_cmd_pty([SPACELINT_BIN, "--no-color", "--help"])
+    assert code == 0
+    assert "\x1b[" not in out
+
+    # 4. NO_COLOR env var in PTY execution
+    # If NO_COLOR is set to non-empty string ("1", "true", "0"), colors MUST be disabled
+    env_no_color_1 = dict(os.environ, NO_COLOR="1")
+    code, out = run_cmd_pty([SPACELINT_BIN, "-f", "default", sample_file], env=env_no_color_1)
+    assert code == 0
+    assert "\x1b[" not in out, f"NO_COLOR=1 should disable ANSI colors in PTY, got {repr(out)}"
+
+    env_no_color_true = dict(os.environ, NO_COLOR="true")
+    code, out = run_cmd_pty([SPACELINT_BIN, "-f", "stylish", sample_file], env=env_no_color_true)
+    assert code == 0
+    assert "\x1b[" not in out
+
+    # If NO_COLOR is set to empty string (""), color MUST NOT be disabled (per no-color.org)
+    env_no_color_empty = dict(os.environ, NO_COLOR="")
+    code, out = run_cmd_pty([SPACELINT_BIN, "-f", "default", sample_file], env=env_no_color_empty)
+    assert code == 0
+    assert "\x1b[" in out, "NO_COLOR='' should NOT disable ANSI colors in PTY"
+
+    # 5. TERM=dumb disables colors even in PTY
+    env_dumb = dict(os.environ, TERM="dumb")
+    code, out = run_cmd_pty([SPACELINT_BIN, "-f", "default", sample_file], env=env_dumb)
+    assert code == 0
+    assert "\x1b[" not in out, f"TERM=dumb should disable ANSI colors in PTY, got {repr(out)}"
+
+    # 6. Windows legacy console simulation (OS=Windows_NT and no modern terminal emulator vars)
+    env_win_legacy = dict(os.environ, OS="Windows_NT")
+    env_win_legacy.pop("TERM", None)
+    env_win_legacy.pop("WT_SESSION", None)
+    env_win_legacy.pop("ANSICON", None)
+    env_win_legacy.pop("ConEmuANSI", None)
+    code, out = run_cmd_pty([SPACELINT_BIN, "-f", "default", sample_file], env=env_win_legacy)
+    assert code == 0
+    assert "\x1b[" not in out, f"Windows legacy console should disable ANSI colors, got {repr(out)}"
+
+    # Windows Terminal (WT_SESSION set) allows ANSI colors
+    env_wt = dict(env_win_legacy, WT_SESSION="session-guid")
+    code, out = run_cmd_pty([SPACELINT_BIN, "-f", "default", sample_file], env=env_wt)
+    assert code == 0
+    assert "\x1b[" in out, "Windows Terminal should support ANSI colors"
+
+    print("  TTY detection, NO_COLOR, and --no-color tests passed!")
+
 def main():
     test_cli_flags()
     test_language_fixtures()
@@ -693,6 +804,7 @@ def main():
     test_rule_options_and_categories()
     test_config_overrides()
     test_format_options()
+    test_tty_and_color_detection()
     test_files_and_timings_commands()
     test_limiters_max_warnings_and_problems()
     test_init_command_and_schema()

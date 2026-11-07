@@ -206,6 +206,50 @@ jobs:
           path: dist/spacelint-windows-x64.exe
           if-no-files-found: error
 
+  build-windows-arm64:
+    name: Build (windows-arm64)
+    runs-on: windows-11-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Goose Compiler
+        shell: pwsh
+        run: |
+          $GOOSE_VERSION = "v2026.3"
+          $DOWNLOAD_URL = "https://github.com/aardappel/goose/releases/download/$GOOSE_VERSION/goose-$GOOSE_VERSION-windows-x64.zip"
+          Write-Host "Downloading Goose from $DOWNLOAD_URL..."
+          Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile goose_pkg.zip
+          $targetDir = "$HOME\goose"
+          New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+          Expand-Archive -Path goose_pkg.zip -DestinationPath $targetDir
+          if (-not (Test-Path "$targetDir\goose.exe")) {
+            $inner = Get-ChildItem -Path $targetDir -Filter "goose.exe" -Recurse | Select-Object -First 1
+            $innerDir = $inner.DirectoryName
+            Copy-Item "$innerDir\*" -Destination $targetDir -Recurse -Force
+          }
+          Add-Content $env:GITHUB_PATH "$targetDir"
+          Add-Content $env:GITHUB_ENV "GOOSE_STDLIB=$targetDir\stdlib"
+          & "$targetDir\goose.exe" version
+
+      - name: Build spacelint (windows-arm64)
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" arm64 || call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" arm64
+          mkdir dist
+          goose -o spacelint_arm64.c spacelint.goose --standalone
+          cl.exe /O2 spacelint_arm64.c /Fe:dist/spacelint-windows-arm64.exe
+          dir dist\
+
+      - name: Upload windows-arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spacelint-windows-arm64.exe
+          path: dist/spacelint-windows-arm64.exe
+          if-no-files-found: error
+
   release:
     name: Publish Release & Attestations
     needs:
@@ -214,6 +258,7 @@ jobs:
       - build-darwin-x64
       - build-darwin-arm64
       - build-windows-x64
+      - build-windows-arm64
     runs-on: ubuntu-latest
     permissions:
       contents: write

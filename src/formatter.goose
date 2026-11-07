@@ -3,18 +3,24 @@ import std;
 import os;
 import src.rules;
 
-// ANSI escape helpers
-const ANSI_RESET: const u8[:] = "\x1b[0m";
-const ANSI_BOLD: const u8[:] = "\x1b[1m";
-const ANSI_DIM: const u8[:] = "\x1b[2m";
-const ANSI_UNDERLINE: const u8[:] = "\x1b[4m";
-const ANSI_YELLOW: const u8[:] = "\x1b[33m";
-const ANSI_GOLD: const u8[:] = "\x1b[38;2;255;180;84m";
-const ANSI_RED: const u8[:] = "\x1b[31m";
-const ANSI_GREEN: const u8[:] = "\x1b[32m";
-const ANSI_CYAN: const u8[:] = "\x1b[36m";
-const ANSI_BLUE: const u8[:] = "\x1b[34m";
-const ANSI_MAGENTA: const u8[:] = "\x1b[35m";
+// ANSI escape helpers and color toggling
+var color_enabled: bool = true;
+
+fn set_color_enabled(enabled: bool) {
+    color_enabled = enabled;
+}
+
+fn c_reset() -> const u8[:] { if color_enabled { return "\x1b[0m"; } return ""; }
+fn c_bold() -> const u8[:] { if color_enabled { return "\x1b[1m"; } return ""; }
+fn c_dim() -> const u8[:] { if color_enabled { return "\x1b[2m"; } return ""; }
+fn c_underline() -> const u8[:] { if color_enabled { return "\x1b[4m"; } return ""; }
+fn c_yellow() -> const u8[:] { if color_enabled { return "\x1b[33m"; } return ""; }
+fn c_gold() -> const u8[:] { if color_enabled { return "\x1b[38;2;255;180;84m"; } return ""; }
+fn c_red() -> const u8[:] { if color_enabled { return "\x1b[31m"; } return ""; }
+fn c_green() -> const u8[:] { if color_enabled { return "\x1b[32m"; } return ""; }
+fn c_cyan() -> const u8[:] { if color_enabled { return "\x1b[36m"; } return ""; }
+fn c_blue() -> const u8[:] { if color_enabled { return "\x1b[34m"; } return ""; }
+fn c_magenta() -> const u8[:] { if color_enabled { return "\x1b[35m"; } return ""; }
 
 fn print_rules() {
     var out: u8[>..] = [];
@@ -53,10 +59,10 @@ fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, 
     // Header: "  ⚠ spacelint(rule): msg" or "  ✖ spacelint(rule): msg"
     match sev {
         Error => {
-            format(out, "\n  ", ANSI_RED, ANSI_BOLD, "✖ ", ANSI_RESET, ANSI_BOLD, "spacelint(", ANSI_RESET, ANSI_DIM, rule, ANSI_RESET, ANSI_BOLD, "): ", ANSI_RESET, msg, "\n");
+            format(out, "\n  ", c_red(), c_bold(), "✖ ", c_reset(), c_bold(), "spacelint(", c_reset(), c_dim(), rule, c_reset(), c_bold(), "): ", c_reset(), msg, "\n");
         },
         _ => {
-            format(out, "\n  ", ANSI_GOLD, ANSI_BOLD, "⚠ ", ANSI_RESET, ANSI_BOLD, "spacelint(", ANSI_RESET, ANSI_DIM, rule, ANSI_RESET, ANSI_BOLD, "): ", ANSI_RESET, msg, "\n");
+            format(out, "\n  ", c_gold(), c_bold(), "⚠ ", c_reset(), c_bold(), "spacelint(", c_reset(), c_dim(), rule, c_reset(), c_bold(), "): ", c_reset(), msg, "\n");
         }
     }
 
@@ -66,7 +72,7 @@ fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, 
         out.push(' ');
         k++;
     }
-    format(out, "╭─[", ANSI_RESET, ANSI_BOLD, ANSI_BLUE, file, ANSI_RESET, ":", line_num, ":", col, "]", "\n");
+    format(out, "╭─[", c_reset(), c_bold(), c_blue(), file, c_reset(), ":", line_num, ":", col, "]", "\n");
 
     // Content line: " 1 │ ..." with tabs expanded for visual alignment
     var padding = gutter_w - num_len;
@@ -74,7 +80,7 @@ fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, 
         out.push(' ');
         padding--;
     }
-    format(out, ANSI_DIM, line_num, ANSI_RESET, " │ ");
+    format(out, c_dim(), line_num, c_reset(), " │ ");
 
     var visual_col_at_char: i32[>..] = [];
     var cur_vis_col: i32 = 1;
@@ -106,7 +112,7 @@ fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, 
         out.push(' ');
         k++;
     }
-    format(out, "· ", ANSI_MAGENTA);
+    format(out, "· ", c_magenta());
 
     // Determine visual start and end columns for the caret underline
     var vis_col = 1;
@@ -138,7 +144,7 @@ fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, 
         j++;
     }
 
-    format(out, ANSI_RESET, "\n");
+    format(out, c_reset(), "\n");
 
     // Bottom border: e.g. "   ╰────\n" aligning ╰ with │
     k = 0;
@@ -146,7 +152,7 @@ fn format_diagnostic(out: u8[>..]&, file: const u8[:], line_num: i32, col: i32, 
         out.push(' ');
         k++;
     }
-    format(out, "╰────", ANSI_RESET, "\n");
+    format(out, "╰────", c_reset(), "\n");
 }
 
 fn print_diagnostic(file: const u8[:], line_num: i32, col: i32, end_col: i32, rule: const u8[:], msg: const u8[:], line_content: const u8[:], sev: RuleSeverity) {
@@ -182,7 +188,7 @@ fn get_num_digits(n: i32) -> i32 {
 
 // Format stylish header for a file: \n\x1b[4m<file>\x1b[0m\n
 fn format_stylish_file_header(out: u8[>..]&, file: const u8[:]) {
-    format(out, "\n", ANSI_UNDERLINE, file, ANSI_RESET, "\n");
+    format(out, "\n", c_underline(), file, c_reset(), "\n");
 }
 
 // Format a single stylish item with line_col_w and msg_w for column alignment
@@ -200,10 +206,10 @@ fn format_stylish_diagnostic(out: u8[>..]&, line_num: i32, col: i32, max_line_co
 
     match sev {
         Error => {
-            format(out, ANSI_DIM, line_num, ":", col, ANSI_RESET, "  ", ANSI_RED, "error  ", ANSI_RESET, "  ", msg);
+            format(out, c_dim(), line_num, ":", col, c_reset(), "  ", c_red(), "error  ", c_reset(), "  ", msg);
         },
         _ => {
-            format(out, ANSI_DIM, line_num, ":", col, ANSI_RESET, "  ", ANSI_GOLD, "warning", ANSI_RESET, "  ", msg);
+            format(out, c_dim(), line_num, ":", col, c_reset(), "  ", c_gold(), "warning", c_reset(), "  ", msg);
         }
     }
 
@@ -213,7 +219,7 @@ fn format_stylish_diagnostic(out: u8[>..]&, line_num: i32, col: i32, max_line_co
         msg_pad--;
     }
 
-    format(out, "  ", ANSI_DIM, "spacelint(", rule, ")", ANSI_RESET, "\n");
+    format(out, "  ", c_dim(), "spacelint(", rule, ")", c_reset(), "\n");
 }
 
 fn print_stylish_summary(warnings: i32, errors: i32) {
@@ -222,10 +228,10 @@ fn print_stylish_summary(warnings: i32, errors: i32) {
         return;
     }
     var out: u8[>..] = [];
-    let summary_color = if errors > 0 { ANSI_RED } else { ANSI_GOLD };
+    let summary_color = if errors > 0 { c_red() } else { c_gold() };
     format(out, "\n", summary_color, "✖ ", total, if total == 1 { " problem" } else { " problems" },
         " (", errors, if errors == 1 { " error" } else { " errors" }, ", ",
-        warnings, if warnings == 1 { " warning" } else { " warnings" }, ")\n", ANSI_RESET);
+        warnings, if warnings == 1 { " warning" } else { " warnings" }, ")\n", c_reset());
     write_stdout(out);
 }
 
@@ -233,23 +239,23 @@ fn print_summary(warnings: i32, errors: i32, files_count: i32, elapsed_ms: i64, 
     var out: u8[>..] = [];
 
     if errors > 0 {
-        format(out, "\n", ANSI_BOLD, ANSI_RED, "Found ", errors, if errors == 1 { " error" } else { " errors" }, ANSI_RESET);
+        format(out, "\n", c_bold(), c_red(), "Found ", errors, if errors == 1 { " error" } else { " errors" }, c_reset());
         if warnings > 0 {
-            format(out, ANSI_BOLD, ANSI_GOLD, " and ", warnings, if warnings == 1 { " warning" } else { " warnings" }, ANSI_RESET);
+            format(out, c_bold(), c_gold(), " and ", warnings, if warnings == 1 { " warning" } else { " warnings" }, c_reset());
         }
     } else if warnings > 0 {
-        format(out, "\n", ANSI_BOLD, ANSI_GOLD, "Found ", warnings, if warnings == 1 { " warning" } else { " warnings" }, ANSI_RESET);
+        format(out, "\n", c_bold(), c_gold(), "Found ", warnings, if warnings == 1 { " warning" } else { " warnings" }, c_reset());
     } else {
-        format(out, "\n", ANSI_BOLD, ANSI_GREEN, "Finished", ANSI_RESET);
+        format(out, "\n", c_bold(), c_green(), "Finished", c_reset());
     }
 
-    format(out, " on ", ANSI_BOLD, files_count, if files_count == 1 { " file" } else { " files" }, ANSI_RESET);
+    format(out, " on ", c_bold(), files_count, if files_count == 1 { " file" } else { " files" }, c_reset());
 
     if elapsed_ms >= 1000 {
         let sec = (elapsed_ms as! f64) / 1000.0;
-        format(out, ANSI_DIM, " (", sec, "s)", ANSI_RESET, "\n");
+        format(out, c_dim(), " (", sec, "s)", c_reset(), "\n");
     } else {
-        format(out, ANSI_DIM, " (", elapsed_ms, "ms)", ANSI_RESET, "\n");
+        format(out, c_dim(), " (", elapsed_ms, "ms)", c_reset(), "\n");
     }
 
     if max_warnings_exceeded {

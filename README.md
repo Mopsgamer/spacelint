@@ -59,6 +59,7 @@ Download the bare executable matching your operating system and architecture fro
 | **macOS** | Intel (x86_64) | `spacelint-darwin-x64` |
 | **macOS** | Apple Silicon (arm64) | `spacelint-darwin-arm64` |
 | **Windows** | x86_64 | `spacelint-windows-x64.exe` |
+| **Windows** | ARM64 | `spacelint-windows-arm64.exe` |
 
 On Linux / macOS:
 ```bash

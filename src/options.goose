@@ -25,11 +25,53 @@ struct Config {
     rules: bool,
     fix: bool,
     interactive: bool,
+    no_color: bool,
+    use_color: bool,
     format: FormatOption,
     max_warnings: i32,
     max_problems: i32,
     rules_cfg: RulesConfig,
     files: (const u8[:])[>..]
+}
+
+extern fn isatty(fd: i32) -> i32;
+
+fn detect_color_support(no_color_flag: bool) -> bool {
+    if no_color_flag {
+        return false;
+    }
+    var env_buf: u8[>..] = [];
+    if env("NO_COLOR", env_buf) {
+        if env_buf.len > 0 {
+            return false;
+        }
+    }
+    var term_buf: u8[>..] = [];
+    if env("TERM", term_buf) {
+        if term_buf == "dumb" {
+            return false;
+        }
+    }
+    var wt_buf: u8[>..] = [];
+    let has_wt = env("WT_SESSION", wt_buf) && wt_buf.len > 0;
+    var ansicon_buf: u8[>..] = [];
+    let has_ansicon = env("ANSICON", ansicon_buf) && ansicon_buf.len > 0;
+    var conemu_buf: u8[>..] = [];
+    let has_conemu = env("ConEmuANSI", conemu_buf) && conemu_buf == "ON";
+
+    // On Windows, if OS is Windows (e.g. OS env variable is Windows_NT or Windir is set),
+    // legacy console host without VT processing does not support ANSI colors unless running inside
+    // Windows Terminal (WT_SESSION), ConEmu (ConEmuANSI=ON), ANSICON, or a known unixy terminal like Mintty/Git Bash (TERM).
+    var os_buf: u8[>..] = [];
+    let is_windows = env("OS", os_buf) && os_buf == "Windows_NT";
+    if is_windows {
+        if !has_wt && !has_ansicon && !has_conemu && term_buf.len == 0 {
+            return false;
+        }
+    }
+
+    let tty_fd: i32 = 1; // stdout
+    return isatty(tty_fd) != 0;
 }
 
 fn parse_severity_str(s: const u8[:]) -> RuleSeverity, bool {
@@ -467,6 +509,8 @@ fn parse_cli_args() -> Config {
         rules: false,
         fix: false,
         interactive: false,
+        no_color: false,
+        use_color: true,
         format: FormatOption.Default,
         max_warnings: -1,
         max_problems: -1,
@@ -489,6 +533,8 @@ fn parse_cli_args() -> Config {
             cfg.fix = true;
         } else if arg_str == "-i" || arg_str == "--interactive" {
             cfg.interactive = true;
+        } else if arg_str == "--no-color" {
+            cfg.no_color = true;
         } else if arg_str == "-f" || arg_str == "--format" {
             i++;
             if i < raw.len { cfg.format = parse_format_val(raw[i]); }
@@ -568,5 +614,7 @@ fn parse_cli_args() -> Config {
         }
         i++;
     }
+
+    cfg.use_color = detect_color_support(cfg.no_color);
     return cfg;
 }
