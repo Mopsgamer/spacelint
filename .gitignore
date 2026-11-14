@@ -3,3 +3,5 @@ spacelint
 spacelint.c
 spacelint
 spacelint.exe
+__pycache__
+VERSION

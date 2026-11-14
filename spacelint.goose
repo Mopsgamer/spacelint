@@ -616,7 +616,14 @@ fn print_help() {
 }
 
 fn print_version() {
-    print("spacelint 0.1.0");
+    let version: const u8[:] = embed_file("VERSION");
+    var version_end = version.len;
+    while version_end > 0 && (version[version_end - 1] == '\n' || version[version_end - 1] == '\r') {
+        version_end--;
+    }
+    write_stdout("spacelint ");
+    write_stdout(version[0..version_end]);
+    write_stdout("\n");
 }
 
 fn run_init() {

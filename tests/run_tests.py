@@ -69,6 +69,16 @@ def test_cli_flags():
     code, out, _ = run_cmd([SPACELINT_BIN, "--version"])
     assert code == 0, f"--version failed: code={code}"
     assert "spacelint" in out, "--version output missing spacelint"
+    expected_version = os.environ.get("SPACELINT_VERSION")
+    if not expected_version:
+        expected_version = subprocess.check_output(
+            ["git", "describe", "--tags", "--always"],
+            cwd=ROOT_DIR,
+            text=True,
+        ).strip()
+    if not expected_version.startswith("v"):
+        expected_version = f"v0.0.0-{expected_version}"
+    assert out.strip() == f"spacelint {expected_version}", "--version output does not match the build version"
 
     # -v
     code, out, _ = run_cmd([SPACELINT_BIN, "-v"])

@@ -73,9 +73,10 @@ Ensure `goose` is in your `PATH`:
 ```bash
 git clone https://github.com/Mopsgamer/spacelint.git
 cd spacelint
-goose build spacelint.goose
+python build.py build spacelint.goose
 ./spacelint --help
 ```
+The build command temporarily embeds the version from `git describe`; release builds use the release tag.
 
 To run tests:
 

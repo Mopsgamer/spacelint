@@ -16,6 +16,9 @@ permissions:
   id-token: write
   attestations: write
 
+env:
+  SPACELINT_VERSION: ${{ github.event.inputs.tag }}
+
 jobs:
   build-linux-x64:
     name: Build (linux-x64)
@@ -40,7 +43,7 @@ jobs:
 
       - name: Build spacelint (linux-x64)
         run: |
-          goose build spacelint.goose
+          python build.py build spacelint.goose
 
       - name: Prepare bare binary artifact
         run: |
@@ -80,7 +83,7 @@ jobs:
       - name: Cross-compile spacelint for linux-arm64
         run: |
           mkdir -p dist
-          goose -o /tmp/spacelint_arm64.c spacelint.goose --standalone
+          python build.py -o /tmp/spacelint_arm64.c spacelint.goose --standalone
           aarch64-linux-gnu-gcc -O2 /tmp/spacelint_arm64.c -o dist/spacelint-linux-arm64 -lm -lpthread
           chmod +x dist/spacelint-linux-arm64
           ls -la dist/
@@ -114,7 +117,7 @@ jobs:
 
       - name: Build spacelint (darwin-x64)
         run: |
-          goose build spacelint.goose
+          python build.py build spacelint.goose
           mkdir -p dist
           cp spacelint dist/spacelint-darwin-x64
           chmod +x dist/spacelint-darwin-x64
@@ -149,7 +152,7 @@ jobs:
 
       - name: Build spacelint (darwin-arm64)
         run: |
-          goose build spacelint.goose
+          python build.py build spacelint.goose
           mkdir -p dist
           cp spacelint dist/spacelint-darwin-arm64
           chmod +x dist/spacelint-darwin-arm64
@@ -194,7 +197,7 @@ jobs:
       - name: Build spacelint (windows-x64)
         shell: bash
         run: |
-          goose build spacelint.goose
+          python build.py build spacelint.goose
           mkdir -p dist
           cp spacelint.exe dist/spacelint-windows-x64.exe
           ls -la dist/
@@ -239,7 +242,7 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" arm64 || call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" arm64
           mkdir dist
-          goose -o spacelint_arm64.c spacelint.goose --standalone
+          python build.py -o spacelint_arm64.c spacelint.goose --standalone
           cl.exe /O2 spacelint_arm64.c /Fe:dist/spacelint-windows-arm64.exe
           dir dist\
 
@@ -294,10 +297,14 @@ jobs:
       - name: Determine Release Tag
         id: release_tag
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${SPACELINT_VERSION:-$(git describe --tags --always)}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: $TAG (expected vMAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF_NAME" != "$TAG" ]]; then
+            echo "Pushed tag $GITHUB_REF_NAME does not match release version $TAG"
+            exit 1
           fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "Releasing tag: ${TAG}"
