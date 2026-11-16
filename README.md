@@ -2,6 +2,8 @@
 
 A fast, language-aware whitespace linter and fixer CLI written in the [Goose programming language](https://github.com/aardappel/goose).
 
+See also https://github.com/editorlint/editorlint.
+
 ## Features
 - **Language Aware**: Understands file extensions and rules for TypeScript, JavaScript, JSON, YAML, XML, PROPS, INI, TOML, C++, C, Rust, Zig, Markdown, MDX, Goose, Vlang, D, Lua, Assembly, AssemblyScript, Kotlin, Java, Dart, Odin, Python, Go, Ruby, Shell, PHP, Swift, C#, Scala, CSS, SQL, R, Julia, Perl, Elixir, Erlang, Haskell, Elm, PureScript, GraphQL, Dockerfile, Makefile, Nix, Terraform, Vue, Svelte, Astro, Fortran, Ada, Pascal, OCaml, Clojure, F#, Groovy, PowerShell, Solidity, Nim, Crystal, CMake, Protobuf, Shaders (GLSL, HLSL, WGSL, Metal, Cg, OpenCL, Godot Shaders), GameDev scripts (GameMaker GML, Wren, Squirrel, UnrealScript, QuakeC, Bethesda Papyrus, Godot GDScript), CSV, TSV, and more.
 - **Rich Diagnostics Output**: Diagnostics and summaries formatted with line numbers, code snippets, caret underlines, and timing stats.
@@ -11,7 +13,7 @@ A fast, language-aware whitespace linter and fixer CLI written in the [Goose pro
   - `-f stylish` / `--format stylish`: ESLint-compatible stylish format with underlined file headers, aligned columns, and summary.
 - **Rules & Categories**:
   - `correctness`: `no-trailing-spaces`, `no-carriage-return`, `no-mixed-spaces-and-tabs`.
-  - `style`: `indent`.
+  - `style`: `indent` (default: "tabs").
 - **Rule Configuration**:
   - Turn off rules/categories: `-A` / `--allow` (e.g. `-A no-unused-vars`, `-A correctness`, `-A all`).
   - Enable rules/categories as warnings: `-W` / `--warn` (e.g. `-W no-debugger`).
